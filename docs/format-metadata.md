@@ -1,33 +1,35 @@
 # Metadata in NetCDF, Zarr and Parquet
 
-Starting with v0.6.1, these adapters store the complete CPDataKit metadata dictionary in a
-`cpdatakit_metadata_json` envelope. NetCDF and Zarr use a root attribute; Parquet uses UTF-8
-Arrow schema metadata under the same key, alongside the existing pandas metadata.
+From v0.6.1, NetCDF, Zarr and Parquet files carry the CPDataKit metadata dictionary under
+`cpdatakit_metadata_json`. NetCDF and Zarr store it as a root attribute. Parquet stores the UTF-8
+JSON in Arrow schema metadata, alongside pandas metadata.
 
 ```json
 {"version":1,"metadata":{"units":{"temperature":"K"},"provenance":{"source_description":"thermal experiment"}}}
 ```
 
-Metadata must be a JSON object with finite JSON values and string keys. Writers check encoding
-before creating output. They preserve nested metadata, including validation findings, schema
-references and field mappings, without inventing a successful validation result. Callers retain
-ownership of their data and attributes; writing does not mutate them.
+Writers check that metadata is a JSON object with string keys and finite values before creating
+output. The stored dictionary includes nested fields, schema references, mappings and the supplied
+validation findings. Writing leaves the caller's data and attributes unchanged.
 
-Readers restore the dictionary and remove the transport attribute from the returned xarray
-attributes. Existing metadata keys take precedence over generated format/engine/unit defaults.
-Older files without the envelope retain their previous reading behavior. Unsupported versions
-and malformed envelopes raise DataReadError. The root attribute name is reserved: a writer
-rejects a collision rather than overwriting a caller's attribute.
+On read, the dictionary becomes dataset metadata and the storage attribute is removed from the
+returned xarray attributes. Stored keys take precedence over the reader's format, engine and unit
+defaults. Older files without the envelope use the existing read path.
+
+Malformed envelopes and unsupported versions raise DataReadError. The root attribute name is
+reserved, so a writer reports a collision if the caller already uses it.
 
 ## Zarr replacement and recovery
 
-The writer finishes a sibling temporary store before moving the existing output into
-`.NAME.backup-RANDOM/previous`. It then installs the completed store at the requested path.
-If installation fails, it moves the original back. If rollback also fails, the original backup
-is retained and the exception note gives its path. After resolving the filesystem error, the
-caller can read that backup with ZarrReader or restore it to the intended location.
+The writer first completes a temporary store next to the output. It moves the old output to
+`.NAME.backup-RANDOM/previous`, then renames the new store to the requested path. The backup is
+removed only after the new store is installed.
 
-Directory replacement uses multiple renames, so it does not guarantee uninterrupted visibility
-to concurrent readers or automatic recovery after process termination. An interrupted operation
-may leave a temporary store or backup requiring inspection. Backup contents are only removed
-after successful installation.
+If the final rename fails, the writer moves the original back. A second filesystem error can
+prevent that move. In that case the backup is kept, and its path appears in the exception note.
+Once the filesystem error is resolved, use ZarrReader to read the backup or move it back to the
+output path.
+
+Replacement takes several renames. Concurrent readers can briefly lose access to the output path.
+If the process stops partway through, inspect any temporary store or backup left behind and
+restore the output manually.

@@ -12,13 +12,13 @@ No unreleased changes.
 
 ### Fixed
 
-- Preserve units, provenance, validation summaries, schema references, mappings, and custom JSON
-  metadata in NetCDF, Zarr 3, and Parquet round trips. Readers retain support for older files
-  without the metadata envelope and reject malformed envelopes.
-- Keep the original Zarr store until a replacement has been installed. Failed replacement restores
-  the old path; if restoration also fails, the original remains in a named sibling backup.
-- Record failed application operations as failed jobs and catalog entries, retaining their
-  structured error and validation findings for job polling.
+- Save and restore units, provenance, validation summaries, schema references, mappings and custom
+  JSON metadata in NetCDF, Zarr 3 and Parquet. Older files remain readable. Readers report an error
+  for malformed metadata envelopes.
+- Restore the old Zarr output when replacement fails. If restoration also fails, the original
+  remains in a named backup next to the output.
+- Set failed application jobs and their catalog entries to `failed`. Job polling returns the
+  service error and validation findings.
 
 ## [0.6.0] - 2026-09-03
 

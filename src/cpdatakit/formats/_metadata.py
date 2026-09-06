@@ -1,4 +1,4 @@
-"""Versioned CPDataKit metadata embedded in external-format containers."""
+"""CPDataKit metadata stored in NetCDF, Zarr and Parquet files."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def encode_metadata(metadata: dict[str, Any]) -> str:
 
 
 def decode_metadata(payload: str | bytes | None) -> dict[str, Any]:
-    """Read the envelope while allowing older files without embedded metadata."""
+    """Decode an envelope, or return an empty dict for a legacy file."""
     if payload is None:
         return {}
     try:
@@ -49,7 +49,7 @@ def decode_metadata(payload: str | bytes | None) -> dict[str, Any]:
 
 
 def scientific_for_write(value: Any) -> Any:
-    """Copy attributes to avoid altering the caller's xarray value."""
+    """Attach encoded metadata to a shallow copy of the xarray dataset."""
     if METADATA_KEY in value.data.attrs:
         raise DataValidationError(f"Attribute {METADATA_KEY!r} is reserved for CPDataKit metadata")
     payload = encode_metadata(value.metadata)
@@ -59,7 +59,7 @@ def scientific_for_write(value: Any) -> Any:
 
 
 def scientific_metadata(dataset: Any, **defaults: Any) -> dict[str, Any]:
-    """Remove the transport attribute and retain scientific metadata and native attrs."""
+    """Restore dataset metadata and remove its storage attribute."""
     metadata = decode_metadata(dataset.attrs.pop(METADATA_KEY, None))
     units = {}
     for name, variable in dataset.variables.items():

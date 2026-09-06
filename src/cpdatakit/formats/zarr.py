@@ -187,7 +187,7 @@ class ZarrWriter:
                 raise
         except BaseException:
             shutil.rmtree(temporary, ignore_errors=True)
-            # Never remove a backup containing the original output on a failure.
+            # Keep the original output in its backup if recovery failed.
             if backup is not None and backup.exists() and not (backup / "previous").exists():
                 backup.rmdir()
             raise

@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class JobFailure(JobError):
-    """An explicitly failed operation whose structured result should be retained."""
+    """A failed operation with its structured result."""
 
     def __init__(self, message: str, *, result: Any) -> None:
         super().__init__(message)
@@ -198,7 +198,7 @@ class JobManager:
             return JobHandle(job_id)
 
     def add_done_callback(self, job_id: str, callback: Callable[[JobRecord], None]) -> None:
-        """Subscribe to completion, including jobs that have already finished."""
+        """Call the subscriber when the job finishes, or immediately if it has finished."""
         state = self._state(job_id)
         if state.future is None:
             raise JobError(f"Job has no scheduled future: {job_id}")
@@ -241,7 +241,7 @@ class JobManager:
                 return False
             state.cancel_event.set()
             future = state.future
-        # Future.cancel invokes subscribers synchronously; run them outside the job lock.
+        # Future.cancel calls subscribers immediately. Release the job lock first.
         if future is not None and future.cancel():
             with self._lock:
                 if state.record.status != JobStatus.CANCELLED:
