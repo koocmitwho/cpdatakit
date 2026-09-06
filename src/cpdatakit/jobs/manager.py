@@ -20,6 +20,14 @@ JobFunction = Callable[[threading.Event], Any]
 logger = logging.getLogger(__name__)
 
 
+class JobFailure(JobError):
+    """An explicitly failed operation whose structured result should be retained."""
+
+    def __init__(self, message: str, *, result: Any) -> None:
+        super().__init__(message)
+        self.result = result
+
+
 class JobStatus(str, Enum):
     QUEUED = "queued"
     RUNNING = "running"
@@ -131,7 +139,7 @@ class JobManager:
                 status=JobStatus.FAILED,
                 finished_at=_now(),
                 operation_log=("failed",),
-                result=None,
+                result=sanitize_for_output(exc.result) if isinstance(exc, JobFailure) else None,
                 error=message,
             )
             return
@@ -189,6 +197,26 @@ class JobManager:
             state.future = self._executor.submit(self._run, state, function)
             return JobHandle(job_id)
 
+    def add_done_callback(self, job_id: str, callback: Callable[[JobRecord], None]) -> None:
+        """Subscribe to completion, including jobs that have already finished."""
+        state = self._state(job_id)
+        if state.future is None:
+            raise JobError(f"Job has no scheduled future: {job_id}")
+
+        def notify(future: Future[Any]) -> None:
+            if future.cancelled():
+                with self._lock:
+                    if state.record.status != JobStatus.CANCELLED:
+                        self._update(
+                            state,
+                            status=JobStatus.CANCELLED,
+                            finished_at=_now(),
+                            operation_log=("cancelled",),
+                        )
+            callback(state.record)
+
+        state.future.add_done_callback(notify)
+
     def get(self, job_id: str) -> JobRecord:
         """Return an immutable snapshot for a known job."""
 
@@ -212,14 +240,18 @@ class JobManager:
             }:
                 return False
             state.cancel_event.set()
-            if state.future is not None and state.future.cancel():
-                self._update(
-                    state,
-                    status=JobStatus.CANCELLED,
-                    finished_at=_now(),
-                    operation_log=("cancelled",),
-                )
-            return True
+            future = state.future
+        # Future.cancel invokes subscribers synchronously; run them outside the job lock.
+        if future is not None and future.cancel():
+            with self._lock:
+                if state.record.status != JobStatus.CANCELLED:
+                    self._update(
+                        state,
+                        status=JobStatus.CANCELLED,
+                        finished_at=_now(),
+                        operation_log=("cancelled",),
+                    )
+        return True
 
     def wait(
         self, job_id: str, *, timeout: float | None = None, raise_timeout: bool = False

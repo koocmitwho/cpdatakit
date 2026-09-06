@@ -11,6 +11,7 @@ from typing import Any
 
 from ..data import ScientificDataset
 from ..exceptions import DataReadError, DataValidationError, OutputExistsError
+from ._metadata import scientific_for_write, scientific_metadata
 from .base import CapabilityResult, DetectionResult, ReaderInfo, ReadLimits, Selection, WriterInfo
 
 
@@ -40,12 +41,7 @@ def _store_bytes(path: Path) -> int:
 
 
 def _metadata(dataset: Any) -> dict[str, Any]:
-    units: dict[str, Any] = {}
-    for name, variable in dataset.variables.items():
-        unit = variable.attrs.get("unit", variable.attrs.get("units"))
-        if unit is not None:
-            units[name] = unit
-    return {"format": "Zarr 3", "units": units}
+    return scientific_metadata(dataset, format="Zarr 3")
 
 
 def _selected(dataset: Any, selection: Selection | None) -> Any:
@@ -125,7 +121,8 @@ class ZarrReader:
             with xarray.open_zarr(input_path, consolidated=False) as opened:
                 dataset = opened.load()
             dataset = _selected(dataset, selection)
-            return ScientificDataset(dataset.copy(deep=True), _metadata(dataset), input_path)
+            metadata = _metadata(dataset)
+            return ScientificDataset(dataset.copy(deep=True), metadata, input_path)
         except DataReadError:
             raise
         except (OSError, ValueError, TypeError, KeyError) as exc:
@@ -146,12 +143,17 @@ class ZarrWriter:
             _zarr()
         except DataReadError as exc:
             return CapabilityResult(False, (str(exc),))
+        try:
+            scientific_for_write(data)
+        except DataValidationError as exc:
+            return CapabilityResult(False, (str(exc),))
         return CapabilityResult(True)
 
     def write(self, data: object, output: Path, *, force: bool = False) -> Path:
         capability = self.check(data)
         if not capability.supported:
             raise DataValidationError("; ".join(capability.messages))
+        dataset = scientific_for_write(data)
         target = Path(output)
         if target.exists() and not force:
             raise OutputExistsError(
@@ -159,15 +161,36 @@ class ZarrWriter:
             )
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = Path(tempfile.mkdtemp(prefix=f".{target.name}.", dir=target.parent))
+        backup: Path | None = None
         try:
-            data.data.to_zarr(temporary, mode="w", consolidated=False, zarr_format=3)
+            dataset.to_zarr(temporary, mode="w", consolidated=False, zarr_format=3)
+            if target.is_symlink():
+                raise DataValidationError("Zarr output must not be a symbolic link")
             if target.exists():
-                if target.is_dir():
-                    shutil.rmtree(target)
-                else:
-                    target.unlink()
-            os.replace(temporary, target)
+                if not force:
+                    raise OutputExistsError(f"Output already exists: {target}")
+                backup = Path(tempfile.mkdtemp(prefix=f".{target.name}.backup-", dir=target.parent))
+                os.replace(target, backup / "previous")
+            try:
+                os.replace(temporary, target)
+            except BaseException as failure:
+                if backup is not None:
+                    try:
+                        os.replace(backup / "previous", target)
+                    except OSError as recovery_error:
+                        failure.add_note(
+                            f"Original Zarr output retained at {backup / 'previous'}: "
+                            f"{recovery_error}"
+                        )
+                    else:
+                        backup.rmdir()
+                raise
         except BaseException:
             shutil.rmtree(temporary, ignore_errors=True)
+            # Never remove a backup containing the original output on a failure.
+            if backup is not None and backup.exists() and not (backup / "previous").exists():
+                backup.rmdir()
             raise
+        if backup is not None:
+            shutil.rmtree(backup, ignore_errors=True)
         return target

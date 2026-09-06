@@ -6,6 +6,7 @@ import html
 import os
 import secrets
 import tempfile
+import threading
 from pathlib import Path
 from typing import Annotated, Final
 
@@ -34,6 +35,7 @@ from ..application import (
 from ..catalog import ProjectRecord, SQLiteCatalog
 from ..exceptions import CatalogError, JobError
 from ..jobs import JobManager
+from ..jobs.manager import JobFailure
 from ..provenance import sha256_file
 from ..schema import BUILTIN_PROFILES
 
@@ -191,6 +193,7 @@ def create_app(
     catalog.initialize()
     jobs = JobManager()
     job_projects: dict[str, int] = {}
+    catalog_job_lock = threading.Lock()
     session_token = secrets.token_urlsafe(32)
     csrf_token = secrets.token_urlsafe(32)
 
@@ -270,10 +273,16 @@ def create_app(
         input_path: Path | None = None,
         output_path_value: Path | None = None,
     ) -> Response:
+        def run_service(cancel):
+            result = function(cancel)
+            if result.get("status") == "failed":
+                raise JobFailure(result["error"]["message"], result=result)
+            return result
+
         try:
             handle = jobs.submit(
                 operation,
-                function,
+                run_service,
                 input_path=input_path,
                 output_path=output_path_value,
             )
@@ -307,6 +316,7 @@ def create_app(
                 "Inspect the catalog and retry the operation.",
             )
         job_projects[handle.id] = project_id
+        jobs.add_done_callback(handle.id, sync_catalog_job)
         response = JSONResponse(
             {"job_id": handle.id, "operation": operation, "status": "queued"},
             status_code=202,
@@ -314,20 +324,22 @@ def create_app(
         return _set_session_cookie(response, session_token)
 
     def sync_catalog_job(record) -> None:
-        project_id = job_projects.get(record.id)
-        if project_id is None:
-            return
-        try:
-            catalog.update_job(
-                record.id,
-                status=record.status.value,
-                started_at=record.started_at,
-                finished_at=record.finished_at,
-                operation_log=record.operation_log,
-                error=record.error,
-            )
-        except CatalogError:
-            return
+        with catalog_job_lock:
+            if record.id not in job_projects:
+                return
+            # Polling may carry an older snapshot than the completion callback.
+            current = jobs.get(record.id)
+            try:
+                catalog.update_job(
+                    current.id,
+                    status=current.status.value,
+                    started_at=current.started_at,
+                    finished_at=current.finished_at,
+                    operation_log=current.operation_log,
+                    error=current.error,
+                )
+            except CatalogError:
+                return
 
     def artifact_registration(
         project_id: int,

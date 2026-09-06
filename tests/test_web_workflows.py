@@ -261,3 +261,95 @@ def test_job_cancel_route_requests_cooperative_cancellation(tmp_path: Path) -> N
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] in {"running", "cancelled"}
     assert _wait_for_job(app, handle.id)["status"] == "cancelled"
+
+
+def test_failed_conversion_records_failed_job_and_retains_service_findings(tmp_path: Path) -> None:
+    app = create_app(tmp_path)
+    try:
+        home, project_id = _seed_curve(app, tmp_path)
+        dataset_id = app.state.catalog.list_datasets(project_id)[0].id
+        response = _request(
+            app,
+            "POST",
+            f"/api/projects/{project_id}/convert",
+            cookies=home.cookies,
+            headers={"X-CSRF-Token": _csrf(home)},
+            data={"dataset_id": str(dataset_id), "schema": "point", "output": "results/invalid.h5"},
+        )
+        assert response.status_code == 202
+        job_id = response.json()["job_id"]
+        app.state.jobs.wait(job_id, timeout=5, raise_timeout=True)
+        for _ in range(100):
+            record = app.state.catalog.get_job(job_id)
+            if record.status == "failed":
+                break
+            time.sleep(0.01)
+        assert record.status == "failed"
+        assert record.finished_at
+        assert record.error
+        project = _request(app, "GET", f"/api/projects/{project_id}").json()
+        assert project["jobs"][0]["status"] == "failed"
+        result = _request(app, "GET", f"/api/jobs/{job_id}").json()
+        assert result["status"] == "failed"
+        assert result["result"]["error"]["code"] == "validation_failed"
+        assert result["result"]["value"]["validation"]["valid"] is False
+        assert result["error"]
+        assert app.state.catalog.get_job(job_id).status == "failed"
+        assert app.state.catalog.list_artifacts(project_id) == ()
+        assert not (tmp_path / "projects" / str(project_id) / "results" / "invalid.h5").exists()
+    finally:
+        app.state.jobs.shutdown()
+
+
+def test_polling_cannot_overwrite_completed_catalog_state(tmp_path, monkeypatch):
+    import importlib
+
+    web_module = importlib.import_module("cpdatakit.web.app")
+    app = create_app(tmp_path)
+    gate = threading.Event()
+    started = threading.Event()
+    original_convert = web_module.convert_and_write
+
+    def blocked_convert(request):
+        started.set()
+        assert gate.wait(timeout=5)
+        return original_convert(request)
+
+    monkeypatch.setattr(web_module, "convert_and_write", blocked_convert)
+    try:
+        home, project_id = _seed_curve(app, tmp_path)
+        dataset_id = app.state.catalog.list_datasets(project_id)[0].id
+        response = _request(
+            app,
+            "POST",
+            f"/api/projects/{project_id}/convert",
+            cookies=home.cookies,
+            headers={"X-CSRF-Token": _csrf(home)},
+            data={"dataset_id": str(dataset_id), "schema": "point", "output": "results/invalid.h5"},
+        )
+        job_id = response.json()["job_id"]
+        assert started.wait(timeout=2)
+        original_get = app.state.jobs.get
+        first_read = True
+
+        def delayed_snapshot(requested_id):
+            nonlocal first_read
+            record = original_get(requested_id)
+            if first_read:
+                first_read = False
+                assert record.status.value == "running"
+                gate.set()
+                app.state.jobs.wait(job_id, timeout=5, raise_timeout=True)
+                for _ in range(100):
+                    if app.state.catalog.get_job(job_id).status == "failed":
+                        break
+                    time.sleep(0.01)
+                assert app.state.catalog.get_job(job_id).status == "failed"
+            return record
+
+        monkeypatch.setattr(app.state.jobs, "get", delayed_snapshot)
+        assert _request(app, "GET", f"/api/jobs/{job_id}").status_code == 200
+        assert app.state.catalog.get_job(job_id).status == "failed"
+    finally:
+        gate.set()
+        app.state.jobs.shutdown()

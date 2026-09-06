@@ -5,6 +5,8 @@ from pathlib import Path
 
 import tomllib
 
+from cpdatakit import __version__
+
 ROOT = Path(__file__).parents[1]
 
 
@@ -12,7 +14,7 @@ def test_v06_python_floor_and_release_version_are_declared() -> None:
     payload = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 
     assert payload["project"]["requires-python"] == ">=3.12"
-    assert payload["project"]["version"] == "0.6.0"
+    assert payload["project"]["version"] == __version__
     assert "Programming Language :: Python :: 3.10" not in payload["project"]["classifiers"]
     assert "Programming Language :: Python :: 3.11" not in payload["project"]["classifiers"]
     assert "Programming Language :: Python :: 3.12" in payload["project"]["classifiers"]

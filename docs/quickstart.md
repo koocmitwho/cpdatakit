@@ -29,10 +29,10 @@ Install the current release from PyPI:
 python -m pip install cpdatakit
 ```
 
-For a pinned GitHub v0.6.0 release wheel, use:
+For a pinned GitHub v0.6.1 release wheel, use:
 
 ```bash
-python -m pip install "https://github.com/17636365690/cpdatakit/releases/download/v0.6.0/cpdatakit-0.6.0-py3-none-any.whl"
+python -m pip install "https://github.com/17636365690/cpdatakit/releases/download/v0.6.1/cpdatakit-0.6.1-py3-none-any.whl"
 ```
 
 ## 2. Generate a reproducible example
