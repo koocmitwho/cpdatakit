@@ -5,15 +5,15 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Generic, Literal, TypeAlias, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
 import matplotlib.pyplot as plt
 
 from ..comparison import compare_reports as compare_report_values
 from ..comparison import write_comparison_bundle
+from ..data import ScientificDataset
 from ..exceptions import (
     AdapterError,
     CPDataKitError,
@@ -23,9 +23,9 @@ from ..exceptions import (
     OutputExistsError,
     SchemaError,
 )
-from ..formats import ReadLimits
-from ..inspection import inspect_dataset, sanitize_error_message, sanitize_for_output
-from ..io import load_dataset, write_hdf5
+from ..formats import NetCDFWriter, ParquetWriter, ReadLimits, ZarrWriter
+from ..inspection import sanitize_error_message, sanitize_for_output
+from ..io import write_hdf5, write_hdf5_v2
 from ..model import ValidationResult
 from ..normalization import FieldMapping, load_mapping_file, normalize_dataset
 from ..plotting import (
@@ -36,9 +36,9 @@ from ..plotting import (
     plot_xy,
     save_figure,
 )
+from ..reporting import SCOPE_NOTE, write_report
 from ..reporting import build_report as build_core_report
-from ..reporting import write_report
-from ..schema import ProfileSchema, load_schema, schema_to_dict
+from ..schema import ProfileSchema
 from ..schema_diff import (
     diff_schemas as diff_schema_values,
 )
@@ -47,12 +47,24 @@ from ..schema_diff import (
     render_schema_diff_markdown,
     write_schema_diff,
 )
-from ..statistics import summarize_dataset
-from ..validation import validate_dataset
+from .data_access import (
+    Contract,
+    ReadLimitError,
+    SchemaInput,
+    contract_dict,
+    inspect_input,
+    is_hdf5_v2,
+    load_value,
+    path_sha256,
+    reader_for,
+    require_tabular_mapping,
+    resolve_contract,
+    summarize_value,
+    validate_value,
+)
 
 logger = logging.getLogger(__name__)
 
-SchemaInput: TypeAlias = str | Path | ProfileSchema | Mapping[str, Any]
 T = TypeVar("T")
 
 
@@ -154,7 +166,7 @@ class ResolveSchemaRequest:
 
 @dataclass(frozen=True, slots=True)
 class ConvertRequest:
-    """Input for validated, atomic HDF5 1.0 conversion."""
+    """Input for validated conversion; default HDF5 layout follows the data model."""
 
     data: Path
     schema: SchemaInput
@@ -164,6 +176,7 @@ class ConvertRequest:
     source_description: str | None = None
     force: bool = False
     allow_invalid: bool = False
+    output_format: Literal["hdf5", "netcdf", "zarr", "parquet"] = "hdf5"
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "data", Path(self.data))
@@ -265,7 +278,7 @@ class SchemaDiffRequest:
 class ResolvedSchemaMapping:
     """Validated schema plus the explicit mappings selected by an edge."""
 
-    schema: ProfileSchema
+    schema: Contract
     mappings: tuple[FieldMapping, ...] = field(default_factory=tuple)
     drop_unmapped: bool = False
 
@@ -274,7 +287,7 @@ class ResolvedSchemaMapping:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "schema": schema_to_dict(self.schema),
+            "schema": contract_dict(self.schema),
             "mappings": [asdict(item) for item in self.mappings],
             "drop_unmapped": self.drop_unmapped,
         }
@@ -365,6 +378,7 @@ class SchemaDiffOutcome:
 
 
 _ERROR_DETAILS: tuple[tuple[type[CPDataKitError], str, str], ...] = (
+    (ReadLimitError, "read_limit_exceeded", "Choose a smaller input or increase the read limit."),
     (DataReadError, "data_read_error", "Check the input path and supported format."),
     (SchemaError, "schema_error", "Check the local schema contract."),
     (NormalizationError, "normalization_error", "Check the explicit field and unit mapping."),
@@ -443,7 +457,7 @@ def _failure(
 def _resolve(
     request: DatasetRequest | ConvertRequest | PlotRequest,
 ) -> ResolvedSchemaMapping:
-    contract = load_schema(request.schema)
+    contract = resolve_contract(request.schema)
     if request.mapping is None:
         return ResolvedSchemaMapping(contract)
     mappings, drop_unmapped = load_mapping_file(request.mapping)
@@ -454,7 +468,8 @@ def _load_normalized(
     request: DatasetRequest | ConvertRequest | PlotRequest,
     resolved: ResolvedSchemaMapping,
 ):
-    dataset = load_dataset(request.data)
+    dataset = load_value(request.data)
+    require_tabular_mapping(dataset, request.mapping)
     if resolved.mappings or request.mapping is not None:
         dataset = normalize_dataset(
             dataset,
@@ -484,7 +499,7 @@ def resolve_schema_and_mapping(
 
     provenance = {"operation": "resolve_schema_and_mapping"}
     try:
-        contract = load_schema(request.schema)
+        contract = resolve_contract(request.schema)
         if request.mapping is None:
             resolved = ResolvedSchemaMapping(contract)
         else:
@@ -518,7 +533,7 @@ def import_and_inspect(
                 ),
                 provenance=provenance,
             )
-        result = inspect_dataset(request.data, schema=request.schema)
+        result = inspect_input(request.data, request.schema, request.read_limits)
         record_count = result.get("record_count")
         if isinstance(record_count, int) and record_count > request.read_limits.max_records:
             return ServiceResult(
@@ -552,8 +567,8 @@ def validate_and_summarize(
     try:
         resolved = _resolve(request)
         dataset = _load_normalized(request, resolved)
-        validation = validate_dataset(dataset, resolved.schema)
-        summary = summarize_dataset(dataset, resolved.schema, validation=validation)
+        validation = validate_value(dataset, resolved.schema)
+        summary = summarize_value(dataset, resolved.schema, validation)
     except Exception as exc:
         return _failure("validate_and_summarize", exc, provenance=provenance)
     return ServiceResult(
@@ -565,7 +580,7 @@ def validate_and_summarize(
 
 
 def convert_and_write(request: ConvertRequest) -> ServiceResult[ConversionOutcome]:
-    """Validate and atomically write a CPDataKit HDF5 1.0 artifact."""
+    """Validate and atomically write through the selected format adapter."""
 
     provenance = _provenance(
         "convert_and_write",
@@ -576,7 +591,7 @@ def convert_and_write(request: ConvertRequest) -> ServiceResult[ConversionOutcom
     try:
         resolved = _resolve(request)
         dataset = _load_normalized(request, resolved)
-        validation = validate_dataset(dataset, resolved.schema)
+        validation = validate_value(dataset, resolved.schema)
     except Exception as exc:
         return _failure("convert_and_write", exc, provenance=provenance)
 
@@ -594,16 +609,37 @@ def convert_and_write(request: ConvertRequest) -> ServiceResult[ConversionOutcom
             provenance=provenance,
         )
     try:
-        write_hdf5(
-            dataset,
-            request.output,
-            resolved.schema,
-            validation,
-            source_description=request.source_description,
-            operation_log=list(provenance["operation_log"]),
-            force=request.force,
-            allow_invalid=request.allow_invalid,
-        )
+        if request.output_format == "hdf5" and not isinstance(dataset, ScientificDataset):
+            write_hdf5(
+                dataset,
+                request.output,
+                resolved.schema,
+                validation,
+                source_description=request.source_description,
+                operation_log=list(provenance["operation_log"]),
+                force=request.force,
+                allow_invalid=request.allow_invalid,
+            )
+        else:
+            dataset.metadata["provenance"] = {
+                **dataset.metadata.get("provenance", {}),
+                **provenance,
+                "input_sha256": path_sha256(request.data),
+            }
+            if request.source_description is not None:
+                dataset.metadata["provenance"]["source_description"] = request.source_description
+            dataset.metadata["validation_summary"] = {
+                "valid": validation.valid,
+                "error_count": len(validation.errors),
+                "warning_count": len(validation.warnings),
+            }
+            if request.output_format == "hdf5":
+                write_hdf5_v2(dataset, request.output, resolved.schema, force=request.force)
+            else:
+                writers = {"netcdf": NetCDFWriter, "zarr": ZarrWriter, "parquet": ParquetWriter}
+                if request.output_format not in writers:
+                    raise DataValidationError("Unsupported output format")
+                writers[request.output_format]().write(dataset, request.output, force=request.force)
     except Exception as exc:
         return _failure("convert_and_write", exc, provenance=provenance, value=outcome)
     artifact = _relative_artifact(request.output, request.workspace)
@@ -649,7 +685,7 @@ def plot_declared_fields(request: PlotRequest) -> ServiceResult[PlotOutcome]:
     try:
         resolved = _resolve(request)
         dataset = _load_normalized(request, resolved)
-        validation = validate_dataset(dataset, resolved.schema)
+        validation = validate_value(dataset, resolved.schema)
     except Exception as exc:
         return _failure("plot_declared_fields", exc, provenance=provenance)
 
@@ -698,7 +734,26 @@ def build_report(request: ReportRequest) -> ServiceResult[ReportOutcome]:
         steps=("inspect", "load", "validate", "summarize", "render"),
     )
     try:
-        report = build_core_report(request.data, request.schema)
+        if reader_for(request.data) is None and not is_hdf5_v2(request.data):
+            report = build_core_report(request.data, request.schema)
+        else:
+            contract = resolve_contract(request.schema)
+            dataset = load_value(request.data)
+            validation = validate_value(dataset, contract)
+            summary = summarize_value(dataset, contract, validation)
+            inspection = inspect_input(request.data, None, ReadLimits(2**63 - 1, 2**63 - 1))
+            report = {
+                **inspection,
+                "schema": contract_dict(contract),
+                "validation": validation.to_dict(),
+                "statistics": summary,
+                "provenance": dataset.metadata.get("provenance", inspection["provenance"]),
+                "scope_note": SCOPE_NOTE,
+            }
+            if isinstance(dataset, ScientificDataset):
+                report["fields"] = [
+                    {"name": name, **info} for name, info in summary["fields"].items()
+                ]
         write_report(report, request.output, format=request.format, force=request.force)
     except Exception as exc:
         return _failure("build_report", exc, provenance=provenance)
