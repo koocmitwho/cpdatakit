@@ -8,6 +8,18 @@ All notable changes follow Keep a Changelog; versions follow Semantic Versioning
 
 No unreleased changes.
 
+## [0.6.1] - 2026-09-06
+
+### Fixed
+
+- Preserve units, provenance, validation summaries, schema references, mappings, and custom JSON
+  metadata in NetCDF, Zarr 3, and Parquet round trips. Readers retain support for older files
+  without the metadata envelope and reject malformed envelopes.
+- Keep the original Zarr store until a replacement has been installed. Failed replacement restores
+  the old path; if restoration also fails, the original remains in a named sibling backup.
+- Record failed application operations as failed jobs and catalog entries, retaining their
+  structured error and validation findings for job polling.
+
 ## [0.6.0] - 2026-09-03
 
 ### Added

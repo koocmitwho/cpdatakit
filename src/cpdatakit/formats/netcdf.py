@@ -10,6 +10,7 @@ from typing import Any
 
 from ..data import ScientificDataset
 from ..exceptions import DataReadError, DataValidationError, OutputExistsError
+from ._metadata import scientific_for_write, scientific_metadata
 from .base import CapabilityResult, DetectionResult, ReaderInfo, ReadLimits, Selection, WriterInfo
 
 _ENGINES = {"h5netcdf": "h5netcdf", "netcdf4": "netCDF4"}
@@ -47,12 +48,7 @@ def _check_bytes(path: Path, limits: ReadLimits) -> None:
 
 
 def _metadata(dataset: Any, engine: str) -> dict[str, Any]:
-    units: dict[str, Any] = {}
-    for name, variable in dataset.variables.items():
-        unit = variable.attrs.get("unit", variable.attrs.get("units"))
-        if unit is not None:
-            units[name] = unit
-    return {"format": "NetCDF", "engine": engine, "units": units}
+    return scientific_metadata(dataset, format="NetCDF", engine=engine)
 
 
 class NetCDFReader:
@@ -136,9 +132,8 @@ class NetCDFReader:
                 if stop > length:
                     raise DataReadError(f"NetCDF selection bounds must fit {dimension}={length}")
                 dataset = dataset.isel({dimension: slice(start, stop)})
-            return ScientificDataset(
-                dataset.copy(deep=True), _metadata(dataset, self.engine), input_path
-            )
+            metadata = _metadata(dataset, self.engine)
+            return ScientificDataset(dataset.copy(deep=True), metadata, input_path)
         except DataReadError:
             raise
         except (OSError, ValueError, TypeError, KeyError) as exc:
@@ -169,12 +164,17 @@ class NetCDFWriter:
                     return CapabilityResult(
                         False, (f"variable {name!r} has unsupported object dtype",)
                     )
+        try:
+            scientific_for_write(data)
+        except DataValidationError as exc:
+            return CapabilityResult(False, (str(exc),))
         return CapabilityResult(True)
 
     def write(self, data: object, output: Path, *, force: bool = False) -> Path:
         capability = self.check(data)
         if not capability.supported:
             raise DataValidationError("; ".join(capability.messages))
+        dataset = scientific_for_write(data)
         target = Path(output)
         if target.exists() and not force:
             raise OutputExistsError(
@@ -188,7 +188,7 @@ class NetCDFWriter:
             )
             os.close(descriptor)
             temporary = Path(name)
-            data.data.to_netcdf(temporary, engine=self.engine)
+            dataset.to_netcdf(temporary, engine=self.engine)
             os.replace(temporary, target)
         except BaseException:
             if temporary is not None:

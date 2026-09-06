@@ -261,3 +261,31 @@ def test_job_cancel_route_requests_cooperative_cancellation(tmp_path: Path) -> N
     assert cancelled.status_code == 200
     assert cancelled.json()["status"] in {"running", "cancelled"}
     assert _wait_for_job(app, handle.id)["status"] == "cancelled"
+
+
+def test_failed_conversion_records_failed_job_and_retains_service_findings(tmp_path: Path) -> None:
+    app = create_app(tmp_path)
+    try:
+        home, project_id = _seed_curve(app, tmp_path)
+        dataset_id = app.state.catalog.list_datasets(project_id)[0].id
+        response = _request(
+            app,
+            "POST",
+            f"/api/projects/{project_id}/convert",
+            cookies=home.cookies,
+            headers={"X-CSRF-Token": _csrf(home)},
+            data={"dataset_id": str(dataset_id), "schema": "point", "output": "results/invalid.h5"},
+        )
+        assert response.status_code == 202
+        job_id = response.json()["job_id"]
+        app.state.jobs.wait(job_id, timeout=5, raise_timeout=True)
+        result = _request(app, "GET", f"/api/jobs/{job_id}").json()
+        assert result["status"] == "failed"
+        assert result["result"]["error"]["code"] == "validation_failed"
+        assert result["result"]["value"]["validation"]["valid"] is False
+        assert result["error"]
+        assert app.state.catalog.get_job(job_id).status == "failed"
+        assert app.state.catalog.list_artifacts(project_id) == ()
+        assert not (tmp_path / "projects" / str(project_id) / "results" / "invalid.h5").exists()
+    finally:
+        app.state.jobs.shutdown()

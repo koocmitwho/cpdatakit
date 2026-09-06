@@ -5,6 +5,8 @@ from pathlib import Path
 
 import tomllib
 
+from cpdatakit import __version__
+
 ROOT = Path(__file__).parents[1]
 
 
@@ -21,7 +23,7 @@ def _load_release_checker():
 def test_v06_version_and_runtime_dependency_metadata() -> None:
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
 
-    assert project["version"] == "0.6.0"
+    assert project["version"] == __version__
     assert project["requires-python"] == ">=3.12"
     dependencies = set(project["dependencies"])
     assert {
@@ -65,7 +67,7 @@ def test_v06_publish_is_tag_triggered_and_uses_trusted_publishing() -> None:
 def test_v06_release_metadata_is_synchronized_and_v05_compatibility_is_documented() -> None:
     checker = _load_release_checker()
 
-    assert checker.verify_release("v0.6.0") == "0.6.0"
+    assert checker.verify_release(f"v{__version__}") == __version__
     english = (ROOT / "README.md").read_text(encoding="utf-8")
     chinese = (ROOT / "README.zh-CN.md").read_text(encoding="utf-8")
     assert "v0.6.0" in english

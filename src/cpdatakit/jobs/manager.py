@@ -20,6 +20,14 @@ JobFunction = Callable[[threading.Event], Any]
 logger = logging.getLogger(__name__)
 
 
+class JobFailure(JobError):
+    """An explicitly failed operation whose structured result should be retained."""
+
+    def __init__(self, message: str, *, result: Any) -> None:
+        super().__init__(message)
+        self.result = result
+
+
 class JobStatus(str, Enum):
     QUEUED = "queued"
     RUNNING = "running"
@@ -131,7 +139,7 @@ class JobManager:
                 status=JobStatus.FAILED,
                 finished_at=_now(),
                 operation_log=("failed",),
-                result=None,
+                result=sanitize_for_output(exc.result) if isinstance(exc, JobFailure) else None,
                 error=message,
             )
             return

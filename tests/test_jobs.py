@@ -76,3 +76,14 @@ def test_job_manager_sanitizes_unexpected_errors_and_supports_timeout() -> None:
         assert "private" not in result.error
     finally:
         manager.shutdown()
+
+
+def test_arbitrary_job_data_is_not_interpreted_as_an_operation_status() -> None:
+    manager = JobManager(max_workers=1)
+    try:
+        handle = manager.submit("read-record", lambda cancel: {"status": "failed", "sample": 7})
+        result = manager.wait(handle.id, timeout=2)
+        assert result.status == JobStatus.SUCCEEDED
+        assert result.result == {"status": "failed", "sample": 7}
+    finally:
+        manager.shutdown()

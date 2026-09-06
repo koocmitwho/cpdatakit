@@ -34,6 +34,7 @@ from ..application import (
 from ..catalog import ProjectRecord, SQLiteCatalog
 from ..exceptions import CatalogError, JobError
 from ..jobs import JobManager
+from ..jobs.manager import JobFailure
 from ..provenance import sha256_file
 from ..schema import BUILTIN_PROFILES
 
@@ -270,10 +271,16 @@ def create_app(
         input_path: Path | None = None,
         output_path_value: Path | None = None,
     ) -> Response:
+        def run_service(cancel):
+            result = function(cancel)
+            if result.get("status") == "failed":
+                raise JobFailure(result["error"]["message"], result=result)
+            return result
+
         try:
             handle = jobs.submit(
                 operation,
-                function,
+                run_service,
                 input_path=input_path,
                 output_path=output_path_value,
             )

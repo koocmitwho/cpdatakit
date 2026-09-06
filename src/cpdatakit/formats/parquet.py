@@ -9,11 +9,11 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pandas as pd
 
 from ..data import ScientificDataset
 from ..exceptions import DataReadError, DataValidationError, OutputExistsError
 from ..model import Dataset
+from ._metadata import METADATA_KEY, decode_metadata, encode_metadata
 from .base import CapabilityResult, DetectionResult, ReaderInfo, ReadLimits, Selection, WriterInfo
 
 
@@ -78,7 +78,11 @@ class ParquetReader:
         _pyarrow()
         try:
             fields = list(selection.fields) if selection and selection.fields else None
-            frame = pd.read_parquet(input_path, engine="pyarrow", columns=fields)
+            parquet = importlib.import_module("pyarrow.parquet")
+            table = parquet.read_table(input_path, columns=fields)
+            metadata = decode_metadata((table.schema.metadata or {}).get(METADATA_KEY.encode()))
+            metadata.setdefault("format", "Parquet")
+            frame = table.to_pandas()
             if selection and (selection.start is not None or selection.stop is not None):
                 start = selection.start if selection.start is not None else 0
                 stop = selection.stop if selection.stop is not None else len(frame)
@@ -87,7 +91,7 @@ class ParquetReader:
                         f"Parquet selection bounds must fit record_count={len(frame)}"
                     )
                 frame = frame.iloc[start:stop].reset_index(drop=True)
-            return Dataset(frame, {"format": "Parquet"}, input_path)
+            return Dataset(frame, metadata, input_path)
         except DataReadError:
             raise
         except (OSError, ValueError, TypeError, KeyError) as exc:
@@ -116,12 +120,22 @@ class ParquetWriter:
                 isinstance(item, (list, tuple, np.ndarray, dict, set, frozenset)) for item in series
             ):
                 return CapabilityResult(False, (f"field {name!r} contains nested object values",))
+        try:
+            encode_metadata(data.metadata)
+        except DataValidationError as exc:
+            return CapabilityResult(False, (str(exc),))
         return CapabilityResult(True)
 
     def write(self, data: object, output: Path, *, force: bool = False) -> Path:
         capability = self.check(data)
         if not capability.supported:
             raise DataValidationError("; ".join(capability.messages))
+        payload = encode_metadata(data.metadata)
+        arrow = _pyarrow()
+        table = arrow.Table.from_pandas(data.data, preserve_index=False)
+        table = table.replace_schema_metadata(
+            {**(table.schema.metadata or {}), METADATA_KEY.encode(): payload.encode("utf-8")}
+        )
         target = Path(output)
         if target.exists() and not force:
             raise OutputExistsError(
@@ -135,7 +149,7 @@ class ParquetWriter:
             )
             os.close(descriptor)
             temporary = Path(name)
-            data.data.to_parquet(temporary, engine="pyarrow", index=False)
+            importlib.import_module("pyarrow.parquet").write_table(table, temporary)
             os.replace(temporary, target)
         except BaseException:
             if temporary is not None:
