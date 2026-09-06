@@ -29,6 +29,9 @@ v0.6 还提供 `ScientificDataset`、CPDataKit HDF5 2.0、NetCDF、Zarr 3 和仅
 
 ## 安装与快速开始
 
+开发中的 v0.7 工作台支持多维数据上传、自定义 schema、验证、转换和报告。
+从源码运行的方法见 [v0.7 工作台指南](docs/v0.7-workbench.md)。
+
 当前 `v0.6.1` 已发布到 PyPI，使用以下命令安装：
 
 ```powershell

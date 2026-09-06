@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ project.name }} · CPDataKit</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+  <script type="module" src="{{ url_for('static', path='app.js') }}"></script>
+</head>
+<body data-project-id="{{ project.id }}">
+  <header class="topbar"><a href="/">CPDataKit</a><span>LOCAL WORKBENCH</span></header>
+  <main>
+    <a class="back" href="/">← All projects</a><h1>{{ project.name }}</h1>
+    <p class="lead">Validate uploaded data and download converted files or reports.</p>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="workflow-grid">
+      <section>
+        <h2><span class="step">1</span> Choose a schema</h2>
+        <label for="schema">Schema for this workflow</label>
+        <select id="schema" name="schema">
+          <optgroup label="Bundled · schema 1.0"><option value="curve">Curve</option><option value="point">Point</option><option value="field2d">2D field</option></optgroup>
+          <optgroup label="Project schemas">
+            {% for schema in schemas %}<option value="schema:{{ schema.id }}" {% if loop.last %}selected{% endif %}>{{ schema.name }} · {{ schema.version }} · #{{ schema.id }}</option>{% endfor %}
+          </optgroup>
+        </select>
+        <p class="hint">Use schema 1.0 for tables and schema 2.0 for multidimensional data.</p>
+        <details><summary>Add a custom schema</summary>
+          <form data-operation="schema" action="/api/projects/{{ project.id }}/schemas" method="post" enctype="multipart/form-data">
+            <label for="schema-file">Schema JSON file</label><input id="schema-file" type="file" name="file" accept=".json" required>
+            <p class="hint">Upload standalone JSON. For includes or extends, resolve the schema in Python first.</p>
+            <button type="submit" class="secondary">Add schema</button>
+          </form>
+        </details>
+      </section>
+      <section>
+        <h2><span class="step">2</span> Upload data</h2>
+        <form data-operation="upload" action="/api/projects/{{ project.id }}/inspect" method="post" enctype="multipart/form-data">
+          <label for="data-file">Data file</label><input id="data-file" type="file" name="file" accept=".csv,.json,.nc,.netcdf,.parquet,.h5,.hdf5" required>
+          <p class="hint">CSV, JSON records, NetCDF, Parquet or CPDataKit HDF5 1.0 / 2.0.</p>
+          <button type="submit">Upload and inspect</button>
+        </form>
+        <details><summary>Upload a Zarr directory</summary>
+          <form data-operation="zarr" action="/api/projects/{{ project.id }}/inspect-zarr" method="post" enctype="multipart/form-data">
+            <label for="zarr-files">Zarr directory</label><input id="zarr-files" type="file" name="files" webkitdirectory multiple required>
+            <p class="hint">Select one .zarr folder containing up to 1,000 files.</p>
+            <button type="submit" class="secondary">Upload directory</button>
+          </form>
+        </details>
+      </section>
+    </div>
+    <section>
+      <h2><span class="step">3</span> Validate and create results</h2>
+      <label for="dataset">Uploaded dataset</label>
+      <select id="dataset" name="dataset_id" {% if not datasets %}disabled{% endif %}>
+        {% for dataset in datasets %}<option value="{{ dataset.id }}" {% if loop.last %}selected{% endif %}>{{ dataset.relative_path.split('/')[-1] }}</option>
+        {% else %}<option value="">Upload a dataset to continue</option>{% endfor %}
+      </select>
+      <form data-operation="validate" action="/api/projects/{{ project.id }}/validate" method="post">
+        <button type="submit" data-needs-dataset {% if not datasets %}disabled{% endif %}>Validate dataset</button>
+      </form>
+      <div class="workflow-grid compact">
+        <form data-operation="convert" action="/api/projects/{{ project.id }}/convert" method="post">
+          <h3>Convert data</h3><label for="output-format">Output format</label>
+          <select id="output-format" name="output_format"><option value="hdf5">HDF5 · layout follows the data</option><option value="netcdf">NetCDF · multidimensional</option><option value="zarr">Zarr 3 · multidimensional</option><option value="parquet">Parquet · tabular</option></select>
+          <label for="convert-output">Output path in this project</label><input id="convert-output" name="output" value="results/converted.h5" required>
+          <label class="check"><input type="checkbox" name="force" value="true"> Replace an existing output</label>
+          <button type="submit" data-needs-dataset {% if not datasets %}disabled{% endif %}>Convert dataset</button>
+        </form>
+        <form data-operation="report" action="/api/projects/{{ project.id }}/report" method="post">
+          <h3>Validation report</h3><label for="report-format">Report format</label>
+          <select id="report-format" name="format"><option value="html">HTML · view in browser</option><option value="markdown">Markdown</option><option value="json">JSON</option></select>
+          <label for="report-output">Report path in this project</label><input id="report-output" name="output" value="results/report.html" required>
+          <label class="check"><input type="checkbox" name="force" value="true"> Replace an existing report</label>
+          <button type="submit" data-needs-dataset {% if not datasets %}disabled{% endif %}>Create report</button>
+        </form>
+      </div>
+    </section>
+    <section id="operation-result" aria-live="polite" aria-atomic="true" hidden><h2 id="result-title">Result</h2><div id="result-content"></div></section>
+    <section>
+      <h2><span class="step">4</span> View results</h2><div id="artifacts">
+        {% for artifact in artifacts %}<p><a href="/api/projects/{{ project.id }}/artifacts/{{ artifact.id }}" target="_blank" rel="noopener">{{ artifact.relative_path.split('/')[-1] }}</a> <span class="hint">{{ artifact.kind }}</span> · <a href="/api/projects/{{ project.id }}/artifacts/{{ artifact.id }}?download=true">Download</a></p>
+        {% else %}<p class="hint">Converted data and reports will appear here.</p>{% endfor %}
+      </div>
+      <h3>Jobs</h3><div id="jobs">
+        {% for job in jobs %}<p data-job-id="{{ job.id }}">{{ job.operation }} · {{ job.status }} · {{ job.output_filename or '' }}</p>
+        {% else %}<p class="hint" id="no-jobs">No jobs yet.</p>{% endfor %}
+      </div>
+    </section>
+    <footer>Validation checks the fields, dimensions and units declared in your schema.</footer>
+  </main>
+</body>
+</html>

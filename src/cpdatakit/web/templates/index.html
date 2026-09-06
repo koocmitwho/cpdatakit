@@ -4,12 +4,15 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CPDataKit local workbench</title>
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
     <script type="module" src="{{ url_for('static', path='app.js') }}"></script>
   </head>
   <body>
+    <header class="topbar"><a href="/">CPDataKit</a><span>LOCAL WORKBENCH</span></header>
+    <main>
     <h1>CPDataKit local workbench</h1>
-    <p>Local-only project workspace for bounded inspection and validation.</p>
+    <p class="lead">Organize data, validate a schema, and create downloadable results.</p>
     <section>
       <h2>Create project</h2>
       <form method="post" action="/api/projects">
@@ -23,11 +26,14 @@
       <h2>Projects</h2>
       <ul>
         {% for project in projects %}
-        <li data-project-id="{{ project.id }}">{{ project.name }}</li>
+        <li data-project-id="{{ project.id }}"><a href="/projects/{{ project.id }}">{{ project.name }} →</a></li>
         {% else %}
         <li>No projects yet.</li>
         {% endfor %}
       </ul>
     </section>
+    <div id="home-error" role="alert"></div>
+    <footer>Your files and results stay in the local workspace.</footer>
+    </main>
   </body>
 </html>

@@ -1,5 +1,8 @@
 # CPDataKit
 
+The upcoming v0.7 workbench supports multidimensional uploads, custom schemas, validation,
+conversion and reports. Run it from source using the [workbench guide](docs/v0.7-workbench.md).
+
 [![CI](https://github.com/17636365690/cpdatakit/actions/workflows/ci.yml/badge.svg)](https://github.com/17636365690/cpdatakit/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/17636365690/cpdatakit)](https://github.com/17636365690/cpdatakit/releases/latest)
 [![PyPI](https://img.shields.io/pypi/v/cpdatakit)](https://pypi.org/project/cpdatakit/)

@@ -1,4 +1,4 @@
-# v0.6 application service boundary
+# Application service boundary
 
 The v0.6 application service boundary is additive to the v0.5 package surface and does not change
 schema 1.0, HDF5 1.0, or the existing command names.
@@ -22,10 +22,14 @@ still contain `ValidationSummary.validation.valid == False`: invalid declared da
 validation operation, not an application crash. A conversion with validation errors is a failed
 operation and never creates an artifact unless `allow_invalid=True` was explicit.
 
-`ImportInspectRequest.read_limits` uses positive `ReadLimits` values. The service rejects an input
-that exceeds the byte or record bound before returning the inspection payload. `convert_and_write`
-only calls the existing HDF5 1.0 writer and reports the output as a path relative to `workspace`;
-outside-workspace paths become `[outside-workspace]`.
+`ImportInspectRequest.read_limits` accepts positive `ReadLimits` values. The service checks byte and
+record limits before returning an inspection payload. `convert_and_write` defaults to HDF5 1.0
+for tabular data and HDF5 2.0 for scientific data. Artifact paths are relative to `workspace`.
+Paths outside it are shown as `[outside-workspace]`.
+
+v0.7 services read NetCDF, Zarr and Parquet through the format adapters. Requests accept schema 1.0
+and schema 2.0, and `output_format` selects the conversion writer. See the
+[workbench guide](v0.7-workbench.md) for supported formats and the page workflow.
 
 Expected CPDataKit exceptions become stable error codes, sanitized messages, and suggested actions.
 Unexpected exceptions receive a correlation ID in the log and a generic message at the edge. Service

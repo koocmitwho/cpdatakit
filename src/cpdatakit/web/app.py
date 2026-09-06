@@ -7,6 +7,7 @@ import os
 import secrets
 import tempfile
 import threading
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Final
 
@@ -32,12 +33,14 @@ from ..application import (
     plot_declared_fields,
     validate_and_summarize,
 )
+from ..application.data_access import path_sha256
 from ..catalog import ProjectRecord, SQLiteCatalog
-from ..exceptions import CatalogError, JobError
+from ..exceptions import CatalogError, JobError, SchemaError
 from ..jobs import JobManager
 from ..jobs.manager import JobFailure
 from ..provenance import sha256_file
-from ..schema import BUILTIN_PROFILES
+from ..schema import ProfileSchema
+from .workbench import install_workbench, select_schema
 
 _SESSION_COOKIE: Final = "cpdatakit_session"
 _CSRF_HEADER: Final = "X-CSRF-Token"
@@ -97,7 +100,7 @@ def _safe_project_path(workspace: Path, project_root: Path, raw_name: str) -> Pa
         or ":" in parts[0]
     ):
         raise ValueError("Path must remain inside the project workspace")
-    return _within(workspace, project_root.joinpath(*parts))
+    return _within(project_root, _within(workspace, project_root.joinpath(*parts)))
 
 
 def _job_payload(record) -> dict[str, object]:
@@ -207,6 +210,8 @@ def create_app(
     app.state.catalog = catalog
     app.state.jobs = jobs
     app.state.workspace = workspace_path
+    app.state.upload_limit = upload_limit
+    app.state.preview_limit = preview_limit
 
     @app.middleware("http")
     async def local_host_guard(request: Request, call_next):
@@ -251,7 +256,9 @@ def create_app(
         if record is None:
             raise CatalogError(f"Dataset does not exist: {dataset_id}")
         path = _within(workspace_path, workspace_path / record.relative_path)
-        if not path.is_file() or not path.is_relative_to(root):
+        if not (
+            path.is_file() or (path.is_dir() and path.suffix.lower() == ".zarr")
+        ) or not path.is_relative_to(root):
             raise CatalogError("Dataset source is not a regular project file")
         return path
 
@@ -263,7 +270,11 @@ def create_app(
         return path
 
     def output_path(project_id: int, raw_name: str) -> Path:
-        return _safe_project_path(workspace_path, project_root(project_id), raw_name)
+        root = project_root(project_id)
+        target = _safe_project_path(workspace_path, root, raw_name)
+        if any(target.is_relative_to(root / folder) for folder in ("uploads", "schemas")):
+            raise ValueError("Outputs cannot replace uploaded datasets or schemas")
+        return target
 
     def queue_job(
         operation: str,
@@ -348,12 +359,12 @@ def create_app(
         kind: str,
         metadata: dict[str, object],
     ) -> None:
-        digest_path = path / "manifest.json" if path.is_dir() else path
+        digest_path = path / "manifest.json" if kind == "compare" and path.is_dir() else path
         catalog.register_artifact(
             project_id,
             path,
             kind=kind,
-            sha256=sha256_file(digest_path),
+            sha256=path_sha256(digest_path),
             metadata=metadata,
         )
 
@@ -474,12 +485,14 @@ def create_app(
         csrf_error = require_csrf(request, csrf_token_form)
         if csrf_error is not None:
             return csrf_error
-        if schema_name not in BUILTIN_PROFILES:
+        try:
+            schema = select_schema(app, project_id, schema_name)
+        except (SchemaError, CatalogError):
             return _json_error(
                 400,
                 "unsupported_schema",
-                "The UI accepts only a bundled schema profile.",
-                "Choose curve, point, or field2d.",
+                "The selected schema is unavailable in this project.",
+                "Choose a bundled profile or upload a project schema.",
             )
         temporary_path: Path | None = None
         try:
@@ -550,19 +563,20 @@ def create_app(
         result = import_and_inspect(
             ImportInspectRequest(
                 data=upload_path,
-                schema=schema_name,
+                schema=schema,
                 read_limits=ReadLimits(max_records=10_000, max_bytes=preview_limit),
                 workspace=workspace_path,
             )
         )
         if not result.ok:
+            upload_path.unlink(missing_ok=True)
             status_code = (
                 413 if result.error and result.error.code == "read_limit_exceeded" else 400
             )
             response = JSONResponse(result.to_dict(), status_code=status_code)
             return _set_session_cookie(response, session_token)
         try:
-            catalog.register_dataset(
+            dataset_record = catalog.register_dataset(
                 project_id,
                 upload_path,
                 sha256=sha256_file(upload_path),
@@ -575,7 +589,7 @@ def create_app(
                 "The file was stored but could not be registered in the local catalog.",
                 "Inspect the catalog and retry the operation.",
             )
-        response = JSONResponse(result.to_dict())
+        response = JSONResponse({**result.to_dict(), "dataset_id": dataset_record.id})
         return _set_session_cookie(response, session_token)
 
     @app.post("/api/projects/{project_id}/validate")
@@ -589,12 +603,14 @@ def create_app(
         csrf_error = require_csrf(request, csrf_token_form)
         if csrf_error is not None:
             return csrf_error
-        if schema_name not in BUILTIN_PROFILES:
+        try:
+            schema = select_schema(app, project_id, schema_name)
+        except (SchemaError, CatalogError):
             return _json_error(
                 400,
                 "unsupported_schema",
-                "The UI accepts only a bundled schema profile.",
-                "Choose curve, point, or field2d.",
+                "The selected schema is unavailable in this project.",
+                "Choose a bundled profile or upload a project schema.",
             )
         try:
             source = dataset_path(project_id, dataset_id)
@@ -606,7 +622,7 @@ def create_app(
                 "Return to the project home and choose an uploaded dataset.",
             )
         result = validate_and_summarize(
-            DatasetRequest(data=source, schema=schema_name, workspace=workspace_path)
+            DatasetRequest(data=source, schema=schema, workspace=workspace_path)
         )
         response = JSONResponse(result.to_dict(), status_code=200 if result.ok else 400)
         return _set_session_cookie(response, session_token)
@@ -619,6 +635,7 @@ def create_app(
         output_name: Annotated[str, Form(alias="output")],
         schema_name: Annotated[str, Form(alias="schema")] = "curve",
         force: Annotated[bool, Form()] = False,
+        output_format: Annotated[str, Form()] = "hdf5",
         csrf_token_form: Annotated[str | None, Form(alias="csrf_token")] = None,
     ) -> Response:
         csrf_error = require_csrf(request, csrf_token_form)
@@ -634,12 +651,21 @@ def create_app(
                 "The dataset or output path is outside the project workspace.",
                 "Choose an existing dataset and a relative output path.",
             )
-        if schema_name not in BUILTIN_PROFILES:
+        try:
+            schema = select_schema(app, project_id, schema_name)
+        except (SchemaError, CatalogError):
             return _json_error(
                 400,
                 "unsupported_schema",
-                "The UI accepts only a bundled schema profile.",
-                "Choose curve, point, or field2d.",
+                "The selected schema is unavailable in this project.",
+                "Choose a bundled profile or upload a project schema.",
+            )
+        if output_format not in {"hdf5", "netcdf", "zarr", "parquet"}:
+            return _json_error(
+                400,
+                "unsupported_format",
+                "Unknown output format.",
+                "Choose HDF5, NetCDF, Zarr or Parquet.",
             )
         if target.exists() and not force:
             return _json_error(
@@ -655,10 +681,11 @@ def create_app(
             result = convert_and_write(
                 ConvertRequest(
                     data=source,
-                    schema=schema_name,
+                    schema=schema,
                     output=target,
                     workspace=workspace_path,
                     force=force,
+                    output_format=output_format,
                 )
             )
             if result.ok and target.exists():
@@ -692,12 +719,21 @@ def create_app(
         csrf_error = require_csrf(request, csrf_token_form)
         if csrf_error is not None:
             return csrf_error
-        if schema_name not in BUILTIN_PROFILES or format_name not in {"html", "markdown", "json"}:
+        if format_name not in {"html", "markdown", "json"}:
             return _json_error(
                 400,
                 "invalid_report_request",
                 "The report schema or format is not supported.",
-                "Choose a bundled schema and html, markdown, or json output.",
+                "Choose html, markdown, or json output.",
+            )
+        try:
+            schema = select_schema(app, project_id, schema_name)
+        except (SchemaError, CatalogError):
+            return _json_error(
+                400,
+                "unsupported_schema",
+                "Selected schema is unavailable.",
+                "Choose a project schema or bundled profile.",
             )
         try:
             source = dataset_path(project_id, dataset_id)
@@ -723,7 +759,7 @@ def create_app(
             result = build_report(
                 ReportRequest(
                     data=source,
-                    schema=schema_name,
+                    schema=schema,
                     output=target,
                     format=format_name,
                     workspace=workspace_path,
@@ -764,7 +800,7 @@ def create_app(
         csrf_error = require_csrf(request, csrf_token_form)
         if csrf_error is not None:
             return csrf_error
-        if schema_name not in BUILTIN_PROFILES or kind not in {
+        if kind not in {
             "stress-strain",
             "histogram",
             "grain-count",
@@ -776,7 +812,18 @@ def create_app(
                 400,
                 "invalid_plot_request",
                 "The plot schema or kind is not supported.",
-                "Choose a bundled schema and a declared plot kind.",
+                "Choose a declared plot kind.",
+            )
+        try:
+            schema = select_schema(app, project_id, schema_name)
+            if not isinstance(schema, (str, ProfileSchema)):
+                raise SchemaError("Plots currently require tabular data and schema 1.0.")
+        except (SchemaError, CatalogError):
+            return _json_error(
+                400,
+                "unsupported_schema",
+                "Plot requires a tabular schema.",
+                "Choose a bundled profile or a custom schema 1.0.",
             )
         try:
             source = dataset_path(project_id, dataset_id)
@@ -802,7 +849,7 @@ def create_app(
             result = plot_declared_fields(
                 PlotRequest(
                     data=source,
-                    schema=schema_name,
+                    schema=schema,
                     output=target,
                     kind=kind,
                     field=field,
@@ -895,12 +942,24 @@ def create_app(
         try:
             record = jobs.get(job_id)
         except JobError:
-            return _json_error(
-                404,
-                "job_not_found",
-                "The requested job does not exist.",
-                "Refresh the project and choose a known job.",
-            )
+            try:
+                record = catalog.get_job(job_id)
+            except CatalogError:
+                return _json_error(
+                    404,
+                    "job_not_found",
+                    "The requested job does not exist.",
+                    "Refresh the project and choose a known job.",
+                )
+            if record.status in {"running", "queued"}:
+                record = catalog.update_job(
+                    job_id,
+                    status="failed",
+                    finished_at=datetime.now(timezone.utc).isoformat(),
+                    operation_log=(*record.operation_log, "interrupted"),
+                    error="Job interrupted by a server restart. Submit the operation again.",
+                )
+            return _set_session_cookie(JSONResponse(_job_payload(record)), session_token)
         sync_catalog_job(record)
         response = JSONResponse(_job_payload(record))
         return _set_session_cookie(response, session_token)
@@ -928,6 +987,13 @@ def create_app(
         response = JSONResponse(_job_payload(record))
         return _set_session_cookie(response, session_token)
 
+    install_workbench(
+        app,
+        templates,
+        csrf_token=csrf_token,
+        session_token=session_token,
+        require_csrf=require_csrf,
+    )
     return app
 
 
