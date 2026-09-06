@@ -1,7 +1,7 @@
 # CPDataKit
 
-The upcoming v0.7 workbench supports multidimensional uploads, custom schemas, validation,
-conversion and reports. Run it from source using the [workbench guide](docs/v0.7-workbench.md).
+The v0.7 workbench supports multidimensional uploads, custom schemas, validation, conversion
+and reports. Follow the [workbench guide](docs/v0.7-workbench.md) to get started.
 
 [![CI](https://github.com/17636365690/cpdatakit/actions/workflows/ci.yml/badge.svg)](https://github.com/17636365690/cpdatakit/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/17636365690/cpdatakit)](https://github.com/17636365690/cpdatakit/releases/latest)
@@ -65,10 +65,10 @@ Install the current release from PyPI:
 python -m pip install cpdatakit
 ```
 
-For a pinned GitHub v0.6.1 release wheel, use:
+For a pinned GitHub v0.7.0 release wheel, use:
 
 ```bash
-python -m pip install "https://github.com/17636365690/cpdatakit/releases/download/v0.6.1/cpdatakit-0.6.1-py3-none-any.whl"
+python -m pip install "https://github.com/17636365690/cpdatakit/releases/download/v0.7.0/cpdatakit-0.7.0-py3-none-any.whl"
 ```
 
 Then follow the
@@ -128,7 +128,7 @@ The examples and tests cover these paths:
 ## Useful links
 
 - [PyPI package](https://pypi.org/project/cpdatakit/)
-- [v0.6.1 GitHub Release](https://github.com/17636365690/cpdatakit/releases/tag/v0.6.1)
+- [v0.7.0 GitHub Release](https://github.com/17636365690/cpdatakit/releases/tag/v0.7.0)
 - [v0.5.0 GitHub Release](https://github.com/17636365690/cpdatakit/releases/tag/v0.5.0)
 - [Quickstart](https://github.com/17636365690/cpdatakit/blob/main/docs/quickstart.md)
 - [Schema authoring and mapping guide](https://github.com/17636365690/cpdatakit/blob/main/docs/schema-authoring.md)

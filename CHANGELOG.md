@@ -4,11 +4,15 @@ All notable changes follow Keep a Changelog; versions follow Semantic Versioning
 
 ## [Unreleased]
 
+No unreleased changes.
+
+## [0.7.0] - 2026-09-06
+
 ### Added
 
 - Connected NetCDF, Zarr 3, Parquet and HDF5 2.0 to application inspection, validation,
   conversion and reports. Added schema 2.0 array checks and summaries. HDF5 output follows
-  the data model; callers can also select NetCDF, Zarr or tabular Parquet writers.
+  the data model. Callers can also select NetCDF, Zarr or tabular Parquet writers.
 - Added project workbench pages with schema upload/selection, file and Zarr directory uploads,
   validation findings, conversion/report jobs, cancellation, report previews and downloads.
   Custom schema 1.0 profiles also work with the plotting API.

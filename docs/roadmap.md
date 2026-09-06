@@ -22,8 +22,12 @@
   a loopback-only FastAPI/Jinja workbench with bundled assets. The supported CI matrix covers
   Python 3.12/3.13 on Ubuntu, macOS, and Windows.
 
-Potential v0.7 work includes explicit migration manifests, additional evidence-backed adapters,
-richer schema-driven generic plots, and mesh topology. Physical inference, GUI/cloud platforms, and
-solver execution require separate designs and are not implied by v0.6.0.
+- **v0.7.0 (released 2026-09-06):** application and workbench integration for NetCDF, Zarr 3,
+  Parquet and HDF5 2.0. Project pages support custom schemas, uploads, validation, conversion,
+  reports, job status and result downloads. Scientific arrays use schema 2.0 validation and
+  HDF5 2.0 output, while tabular workflows retain their v0.5 contracts.
+
+Future work includes migration manifests, additional adapters, schema-driven plots and mesh
+topology. Solver execution and physical inference need their own data and validation workflows.
 
 Further DADF5 and ODB coverage follows the documented evidence and license review process.

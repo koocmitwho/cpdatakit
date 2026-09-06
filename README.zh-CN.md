@@ -29,10 +29,10 @@ v0.6 还提供 `ScientificDataset`、CPDataKit HDF5 2.0、NetCDF、Zarr 3 和仅
 
 ## 安装与快速开始
 
-开发中的 v0.7 工作台支持多维数据上传、自定义 schema、验证、转换和报告。
-从源码运行的方法见 [v0.7 工作台指南](docs/v0.7-workbench.md)。
+v0.7 工作台支持多维数据上传、自定义 schema、验证、转换和报告。
+使用方法见 [v0.7 工作台指南](docs/v0.7-workbench.md)。
 
-当前 `v0.6.1` 已发布到 PyPI，使用以下命令安装：
+当前 `v0.7.0` 已发布到 PyPI，使用以下命令安装：
 
 ```powershell
 python -m pip install cpdatakit
@@ -44,7 +44,7 @@ Python 3.10 和 3.11 用户继续使用已发布的 v0.5.x 兼容线。
 如果需要固定 GitHub Release wheel，可使用：
 
 ```powershell
-python -m pip install "https://github.com/17636365690/cpdatakit/releases/download/v0.6.1/cpdatakit-0.6.1-py3-none-any.whl"
+python -m pip install "https://github.com/17636365690/cpdatakit/releases/download/v0.7.0/cpdatakit-0.7.0-py3-none-any.whl"
 ```
 
 然后按照[五分钟快速教程](https://github.com/17636365690/cpdatakit/blob/main/docs/quickstart.md)
@@ -70,7 +70,7 @@ python -m pip install "https://github.com/17636365690/cpdatakit/releases/downloa
 ## 项目与集成链接
 
 - [PyPI 软件包](https://pypi.org/project/cpdatakit/)
-- [v0.6.1 GitHub Release](https://github.com/17636365690/cpdatakit/releases/tag/v0.6.1)
+- [v0.7.0 GitHub Release](https://github.com/17636365690/cpdatakit/releases/tag/v0.7.0)
 - [v0.5.0 GitHub Release](https://github.com/17636365690/cpdatakit/releases/tag/v0.5.0)
 - [五分钟快速教程](https://github.com/17636365690/cpdatakit/blob/main/docs/quickstart.md)
 - [Schema authoring 与 mapping 指南](https://github.com/17636365690/cpdatakit/blob/main/docs/schema-authoring.md)
