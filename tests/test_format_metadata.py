@@ -17,6 +17,7 @@ from cpdatakit.formats import (
     NetCDFWriter,
     ParquetReader,
     ParquetWriter,
+    Selection,
     ZarrReader,
     ZarrWriter,
 )
@@ -177,3 +178,14 @@ def test_zarr_successful_overwrite_and_force_guard(tmp_path):
     writer.write(replacement, target, force=True)
     assert ZarrReader().load(target).data["temperature"].values.tolist() == [999.0, 999.0]
     assert list(tmp_path.iterdir()) == [target]
+
+
+def test_legacy_parquet_projection_preserves_named_record_index(tmp_path):
+    frame = pd.DataFrame(
+        {"temperature": [273.15, 283.15], "other": [1, 2]},
+        index=pd.Index(["A", "B"], name="sample"),
+    )
+    target = tmp_path / "indexed.parquet"
+    frame.to_parquet(target)
+    loaded = ParquetReader().load(target, selection=Selection(fields=("temperature",)))
+    pd.testing.assert_frame_equal(loaded.data, frame[["temperature"]])

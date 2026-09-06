@@ -87,3 +87,26 @@ def test_arbitrary_job_data_is_not_interpreted_as_an_operation_status() -> None:
         assert result.result == {"status": "failed", "sample": 7}
     finally:
         manager.shutdown()
+
+
+def test_queued_cancellation_notifies_callbacks_with_terminal_state() -> None:
+    manager = JobManager(max_workers=1)
+    gate = threading.Event()
+    started = threading.Event()
+    observed = []
+    try:
+
+        def blocking(cancel):
+            started.set()
+            gate.wait(timeout=5)
+
+        manager.submit("blocking", blocking)
+        assert started.wait(timeout=2)
+        handle = manager.submit("queued", lambda cancel: "unused")
+        manager.add_done_callback(handle.id, lambda record: observed.append(record.status))
+        assert manager.cancel(handle.id)
+        assert observed == [JobStatus.CANCELLED]
+        assert manager.get(handle.id).operation_log == ("queued", "cancelled")
+    finally:
+        gate.set()
+        manager.shutdown()

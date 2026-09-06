@@ -79,7 +79,7 @@ class ParquetReader:
         try:
             fields = list(selection.fields) if selection and selection.fields else None
             parquet = importlib.import_module("pyarrow.parquet")
-            table = parquet.read_table(input_path, columns=fields)
+            table = parquet.read_table(input_path, columns=fields, use_pandas_metadata=True)
             metadata = decode_metadata((table.schema.metadata or {}).get(METADATA_KEY.encode()))
             metadata.setdefault("format", "Parquet")
             frame = table.to_pandas()
