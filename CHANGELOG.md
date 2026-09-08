@@ -4,7 +4,38 @@ All notable changes follow Keep a Changelog; versions follow Semantic Versioning
 
 ## [Unreleased]
 
-No unreleased changes.
+## [0.8.0] - 2026-09-08
+
+### Fixed
+
+- Apply field and slice selection before loading NetCDF, Zarr and HDF5 2.0 arrays, while preserving
+  existing record selection semantics and the pandas index behavior of Parquet column selection.
+  Parquet skips unrelated row groups.
+- Show read and conversion progress at cancellation checkpoints. Completed, registered outputs
+  keep their successful status and result reference when a cancellation request arrives later.
+- Report conflicting array unit declarations. Reset storage encoding after unit conversion or
+  dimension transposition so NetCDF output retains the converted values.
+
+### Added
+
+- Heatmaps in Python and the workbench, with variable and slice selection, adjustable color limits
+  and PNG export. Images include units and slice positions.
+- Editable schema drafts and mapping previews in Python, CLI and the workbench. Mapping version
+  2.0 renames dimensions and orders axes according to the target schema.
+- Batch conversion from a shared configuration, with validation for each file, output-conflict checks
+  and an atomic progress manifest. Retries check output hashes and retain earlier successful results.
+- A KupferDigital/experiment-to-CPFE example that converts existing experimental curves and FE
+  training data, keeping the source records, license, transformations and case partitions.
+- A reproducible benchmark that measures read time and peak memory in separate processes.
+
+### Release preparation
+
+- Require h5py >=3.11, Pint >=0.24.4 and netCDF4 >=1.7.2 following reproduced NumPy 2 import
+  incompatibilities and a classic NetCDF read failure.
+- Pin lower dependency combinations for each Python version, check installed versions and run CI
+  acceptance against the installed wheel. Reports record the combinations tested and remaining
+  declared-floor gaps.
+- Update project links to koocmitwho/cpdatakit. Scientific snapshots retain their original URLs.
 
 ## [0.7.0] - 2026-09-06
 

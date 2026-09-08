@@ -35,4 +35,11 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #f5f7f9; paddi
 footer { margin: 1.5rem 0 2.5rem; }
 li { padding: .5rem 0; }
 #artifacts p, #jobs p { overflow-wrap: anywhere; }
+#slice-preview { margin: 1.5rem 0 0; }
+#slice-image { display: block; max-width: 100%; height: auto; border: 1px solid #e4e9ed; border-radius: 8px; }
+#slice-caption { margin: .6rem 0; font-size: .9rem; overflow-wrap: anywhere; }
+textarea { width: 100%; padding: .75rem; border: 1px solid #becbd3; border-radius: 6px; font: .85rem/1.5 ui-monospace, monospace; resize: vertical; }
+.table-scroll { overflow-x: auto; margin-top: 1rem; }
+table { border-collapse: collapse; width: 100%; font-size: .85rem; }
+th, td { text-align: left; padding: .6rem; border-bottom: 1px solid #dce3e8; vertical-align: top; }
 @media (max-width: 720px) { .workflow-grid { grid-template-columns: 1fr; gap: 0; } .compact { gap: 1.5rem; } section { padding: 1.1rem; } main { margin-top: 1.5rem; } }

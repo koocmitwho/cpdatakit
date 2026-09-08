@@ -11,6 +11,7 @@ from typing import Any
 from ..data import ScientificDataset
 from ..exceptions import DataReadError, DataValidationError, OutputExistsError
 from ._metadata import scientific_for_write, scientific_metadata
+from ._selection import describe_xarray, materialize, select_xarray
 from .base import CapabilityResult, DetectionResult, ReaderInfo, ReadLimits, Selection, WriterInfo
 
 _ENGINES = {"h5netcdf": "h5netcdf", "netcdf4": "netCDF4"}
@@ -80,10 +81,7 @@ class NetCDFReader:
         try:
             with xarray.open_dataset(input_path, engine=self.engine) as dataset:
                 dimensions = {name: int(length) for name, length in dataset.sizes.items()}
-                variables = {
-                    name: {"dims": list(variable.dims), "shape": list(variable.shape)}
-                    for name, variable in dataset.variables.items()
-                }
+                variables = describe_xarray(dataset)
                 data_variables = tuple(dataset.data_vars)
                 record_count = (
                     int(dataset[data_variables[0]].sizes[dataset[data_variables[0]].dims[0]])
@@ -104,36 +102,18 @@ class NetCDFReader:
         except (OSError, ValueError, TypeError) as exc:
             raise DataReadError(f"Cannot inspect NetCDF input {input_path}: {exc}") from exc
 
-    def load(self, path: Path, *, selection: Selection | None = None) -> ScientificDataset:
+    def load(
+        self, path: Path, *, selection: Selection | None = None, context=None
+    ) -> ScientificDataset:
         input_path = Path(path)
         _check_path(input_path)
         xarray = _xarray()
         _backend(self.engine)
         try:
             with xarray.open_dataset(input_path, engine=self.engine) as opened:
-                dataset = opened.load()
-            if selection and selection.fields:
-                unknown = [name for name in selection.fields if name not in dataset.variables]
-                if unknown:
-                    raise DataReadError(f"Unknown NetCDF selection fields: {unknown}")
-                dataset = dataset[list(selection.fields)]
-            if selection and (selection.start is not None or selection.stop is not None):
-                fields = (
-                    tuple(selection.fields)
-                    if selection and selection.fields
-                    else tuple(dataset.data_vars)
-                )
-                if not fields or not dataset[fields[0]].dims:
-                    raise DataReadError("NetCDF record selection requires a non-scalar field")
-                dimension = dataset[fields[0]].dims[0]
-                length = int(dataset.sizes[dimension])
-                start = selection.start if selection.start is not None else 0
-                stop = selection.stop if selection.stop is not None else length
-                if stop > length:
-                    raise DataReadError(f"NetCDF selection bounds must fit {dimension}={length}")
-                dataset = dataset.isel({dimension: slice(start, stop)})
+                dataset = materialize(select_xarray(opened, selection, label="NetCDF"), context)
             metadata = _metadata(dataset, self.engine)
-            return ScientificDataset(dataset.copy(deep=True), metadata, input_path)
+            return ScientificDataset(dataset, metadata, input_path)
         except DataReadError:
             raise
         except (OSError, ValueError, TypeError, KeyError) as exc:

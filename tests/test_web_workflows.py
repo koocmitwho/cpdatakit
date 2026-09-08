@@ -55,6 +55,54 @@ def _csrf(home: httpx.Response) -> str:
     return home.text.split('name="csrf_token" value="', 1)[1].split('"', 1)[0]
 
 
+def test_conversion_cancel_during_final_registration_retains_completed_result(
+    tmp_path, monkeypatch
+):
+    app = create_app(tmp_path / "workspace")
+    home, project_id = _seed_curve(app, tmp_path)
+    catalog = app.state.catalog
+    original = catalog.register_artifact
+    registered = threading.Event()
+    finish = threading.Event()
+
+    def register(*args, **kwargs):
+        result = original(*args, **kwargs)
+        registered.set()
+        assert finish.wait(5)
+        return result
+
+    monkeypatch.setattr(catalog, "register_artifact", register)
+    try:
+        dataset_id = catalog.list_datasets(project_id)[0].id
+        queued = _request(
+            app,
+            "POST",
+            f"/api/projects/{project_id}/convert",
+            cookies=home.cookies,
+            headers={"X-CSRF-Token": _csrf(home)},
+            data={"dataset_id": dataset_id, "schema": "curve", "output": "result.h5"},
+        )
+        job_id = queued.json()["job_id"]
+        assert registered.wait(5)
+        _request(
+            app,
+            "POST",
+            f"/api/jobs/{job_id}/cancel",
+            cookies=home.cookies,
+            headers={"X-CSRF-Token": _csrf(home)},
+        )
+        finish.set()
+        result = _wait_for_job(app, job_id)
+        assert result["status"] == "succeeded"
+        assert result["result"]["artifact"].endswith("result.h5")
+        assert catalog.get_job(job_id).status == "succeeded"
+        artifact = catalog.list_artifacts(project_id)[0]
+        assert (app.state.workspace / artifact.relative_path).is_file()
+    finally:
+        finish.set()
+        app.state.jobs.shutdown()
+
+
 def _wait_for_job(app, job_id: str) -> dict[str, object]:
     for _ in range(100):
         response = _request(app, "GET", f"/api/jobs/{job_id}")
@@ -310,10 +358,10 @@ def test_polling_cannot_overwrite_completed_catalog_state(tmp_path, monkeypatch)
     started = threading.Event()
     original_convert = web_module.convert_and_write
 
-    def blocked_convert(request):
+    def blocked_convert(request, **kwargs):
         started.set()
         assert gate.wait(timeout=5)
-        return original_convert(request)
+        return original_convert(request, **kwargs)
 
     monkeypatch.setattr(web_module, "convert_and_write", blocked_convert)
     try:

@@ -1,0 +1,25 @@
+{
+  "dataset": "surrogate-data.npz",
+  "feature_names": [
+    "engineering_strain",
+    "E",
+    "yield_stress",
+    "plastic_modulus"
+  ],
+  "feature_units": [
+    "1",
+    "MPa",
+    "MPa",
+    "MPa"
+  ],
+  "target_name": "nominal_axial_stress",
+  "target_unit": "MPa",
+  "epochs": 2500,
+  "patience": 500,
+  "hidden": [
+    32,
+    32
+  ],
+  "seed": 42,
+  "learning_rate": 0.003
+}

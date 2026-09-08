@@ -1,0 +1,240 @@
+{
+  "environment": {
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 198 Stepping 2, GenuineIntel",
+    "cpu_count": 24,
+    "packages": {
+      "numpy": "2.5.3",
+      "pandas": "2.3.3",
+      "xarray": "2026.7.0",
+      "h5py": "3.16.0",
+      "h5netcdf": "1.8.1",
+      "zarr": "3.3.0",
+      "pyarrow": "25.0.1"
+    }
+  },
+  "input": {
+    "array_shape": [
+      128,
+      512,
+      512
+    ],
+    "array_variables": 3,
+    "array_dtype": "float32",
+    "rows": 2000000,
+    "columns": 8,
+    "seed": 20260907,
+    "array_bytes": 402653184
+  },
+  "method": "fresh processes; elapsed excludes imports; process peak RSS includes imports; OS cache uncontrolled; alternating order",
+  "formats": {
+    "netcdf": {
+      "input_bytes": 402765053,
+      "eager": [
+        {
+          "elapsed_seconds": 0.17533700000012686,
+          "peak_rss_mib": 510.81640625,
+          "sha256": "3c12796f0734fa8c31007936652e15731a212852121b628e81975eb84cdc7667",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "pid": 23776
+        },
+        {
+          "elapsed_seconds": 0.15846770000007382,
+          "peak_rss_mib": 510.5,
+          "sha256": "3c12796f0734fa8c31007936652e15731a212852121b628e81975eb84cdc7667",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "pid": 27688
+        },
+        {
+          "elapsed_seconds": 0.16870200000039404,
+          "peak_rss_mib": 510.328125,
+          "sha256": "3c12796f0734fa8c31007936652e15731a212852121b628e81975eb84cdc7667",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "pid": 4476
+        }
+      ],
+      "selective": [
+        {
+          "elapsed_seconds": 0.018530700000155775,
+          "peak_rss_mib": 119.39453125,
+          "sha256": "3c12796f0734fa8c31007936652e15731a212852121b628e81975eb84cdc7667",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "pid": 33112
+        },
+        {
+          "elapsed_seconds": 0.018482200000107696,
+          "peak_rss_mib": 119.2734375,
+          "sha256": "3c12796f0734fa8c31007936652e15731a212852121b628e81975eb84cdc7667",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "pid": 34480
+        },
+        {
+          "elapsed_seconds": 0.017907699999796023,
+          "peak_rss_mib": 119.2265625,
+          "sha256": "3c12796f0734fa8c31007936652e15731a212852121b628e81975eb84cdc7667",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "pid": 14584
+        }
+      ]
+    },
+    "zarr": {
+      "input_bytes": 358761165,
+      "eager": [
+        {
+          "elapsed_seconds": 1.4206271999996716,
+          "peak_rss_mib": 512.5390625,
+          "sha256": "3c12796f0734fa8c31007936652e15731a212852121b628e81975eb84cdc7667",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "pid": 12024
+        },
+        {
+          "elapsed_seconds": 0.6163793999999143,
+          "peak_rss_mib": 511.30859375,
+          "sha256": "3c12796f0734fa8c31007936652e15731a212852121b628e81975eb84cdc7667",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "pid": 31532
+        },
+        {
+          "elapsed_seconds": 0.6380044000002272,
+          "peak_rss_mib": 511.40625,
+          "sha256": "3c12796f0734fa8c31007936652e15731a212852121b628e81975eb84cdc7667",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "pid": 30976
+        }
+      ],
+      "selective": [
+        {
+          "elapsed_seconds": 0.18632479999996576,
+          "peak_rss_mib": 126.48828125,
+          "sha256": "3c12796f0734fa8c31007936652e15731a212852121b628e81975eb84cdc7667",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "pid": 6860
+        },
+        {
+          "elapsed_seconds": 0.17419650000010733,
+          "peak_rss_mib": 126.5,
+          "sha256": "3c12796f0734fa8c31007936652e15731a212852121b628e81975eb84cdc7667",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "pid": 15572
+        },
+        {
+          "elapsed_seconds": 0.17203629999994519,
+          "peak_rss_mib": 126.92578125,
+          "sha256": "3c12796f0734fa8c31007936652e15731a212852121b628e81975eb84cdc7667",
+          "shape": [
+            1,
+            512,
+            512
+          ],
+          "pid": 28516
+        }
+      ]
+    },
+    "parquet": {
+      "input_bytes": 159535459,
+      "eager": [
+        {
+          "elapsed_seconds": 0.03650030000017068,
+          "peak_rss_mib": 178.27734375,
+          "sha256": "2d0e0cf98fd03b0774121514db8729f0541b6057b58260547e05bdcea1dca351",
+          "shape": [
+            100
+          ],
+          "pid": 32872
+        },
+        {
+          "elapsed_seconds": 0.025775099999918893,
+          "peak_rss_mib": 179.53125,
+          "sha256": "2d0e0cf98fd03b0774121514db8729f0541b6057b58260547e05bdcea1dca351",
+          "shape": [
+            100
+          ],
+          "pid": 9672
+        },
+        {
+          "elapsed_seconds": 0.02557699999988472,
+          "peak_rss_mib": 179.58984375,
+          "sha256": "2d0e0cf98fd03b0774121514db8729f0541b6057b58260547e05bdcea1dca351",
+          "shape": [
+            100
+          ],
+          "pid": 28260
+        }
+      ],
+      "selective": [
+        {
+          "elapsed_seconds": 0.005716599999686878,
+          "peak_rss_mib": 117.0,
+          "sha256": "2d0e0cf98fd03b0774121514db8729f0541b6057b58260547e05bdcea1dca351",
+          "shape": [
+            100
+          ],
+          "pid": 16076
+        },
+        {
+          "elapsed_seconds": 0.005185800000162999,
+          "peak_rss_mib": 117.109375,
+          "sha256": "2d0e0cf98fd03b0774121514db8729f0541b6057b58260547e05bdcea1dca351",
+          "shape": [
+            100
+          ],
+          "pid": 27960
+        },
+        {
+          "elapsed_seconds": 0.005110399999921356,
+          "peak_rss_mib": 116.6875,
+          "sha256": "2d0e0cf98fd03b0774121514db8729f0541b6057b58260547e05bdcea1dca351",
+          "shape": [
+            100
+          ],
+          "pid": 14552
+        }
+      ]
+    }
+  }
+}

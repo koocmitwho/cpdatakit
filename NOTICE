@@ -1,23 +1,30 @@
 CPDataKit
 Copyright 2026 CPDataKit contributors
 
-Direct runtime dependencies reviewed for v0.1.x:
-- NumPy: BSD-3-Clause core; packaged metadata also identifies licenses for vendored components.
-- pandas: BSD-3-Clause.
-- h5py: BSD-3-Clause.
-- Matplotlib: PSF-based Matplotlib license (BSD-compatible).
-- Pint: BSD-3-Clause.
+Direct runtime dependency license metadata reviewed for the v0.8.0 candidate:
+- NumPy: BSD-3-Clause core; wheel metadata also lists vendored-component licenses.
+- pandas, h5py, h5netcdf, Pint, Uvicorn and Jinja2: BSD licenses.
+- Matplotlib: PSF-based Matplotlib license.
+- xarray, PyArrow and python-multipart: Apache-2.0.
+- Zarr, netCDF4 and FastAPI: MIT.
 
-These are permissive licenses with no evident incompatibility with Apache-2.0 for this project's
-ordinary dependency use. Dependencies are not copied into this source distribution. This notice
-is informational, is not legal advice, and must be refreshed against the versions shipped by each
-release. See each installed distribution and upstream repository for complete license texts.
+Dependencies are installed separately and are not copied into this source distribution.
+Their distribution metadata and bundled license texts describe the applicable component licenses.
+The candidate installation reports retain the exact versions and artifact hashes reviewed.
 
 DAMASK, Abaqus, and Dassault Systèmes names may be trademarks of their respective owners. Their
-software and data are not distributed with CPDataKit, and they are not core dependencies.
+commercial software and ODB files are not distributed with CPDataKit, and they are not core dependencies.
 
 CPDataKit includes a read-only parser for a documented subset of the DAMASK DADF5 file layout.
 It does not copy DAMASK source code or simulation data and does not require the DAMASK runtime.
 DAMASK is distributed under AGPLv3; see https://damask-multiphysics.org/development/license.html.
-This notice is informational and is not legal advice.
+
+KupferDigital integration materials under examples/cpfe-tensile/reference/ use CC-BY-4.0.
+Source: Hossein Beygi Nasrabadi, Felix Bauer, Ladji Tikana, Patrick Uhlemann, Steffen Thärig,
+Birgit Rehmer and Birgit Skrotzki, KupferDigital mechanical testing datasets: Brinell hardness,
+Vickers hardness, and tensile tests, version 2 (2024), DOI 10.5281/zenodo.10820299.
+License: https://creativecommons.org/licenses/by/4.0/
+The processed experimental curves, FE training arrays, configuration, summary and provenance
+manifest retain their source and transformation descriptions in examples/cpfe-tensile/README.md.
+They come from the owned experiment-to-CPFE integration case. Code remains Apache-2.0.
 

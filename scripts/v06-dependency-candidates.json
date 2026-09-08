@@ -2,18 +2,156 @@
   "format": "CPDataKit v0.6 dependency candidates 1.0",
   "python_minimum": "3.12",
   "packages": [
-    {"name": "numpy", "distribution": "numpy", "module": "numpy", "lower": ">=2.0,<3", "latest": "latest"},
-    {"name": "pandas", "distribution": "pandas", "module": "pandas", "lower": ">=2.2,<3", "latest": "latest"},
-    {"name": "xarray", "distribution": "xarray", "module": "xarray", "lower": ">=2026.7,<2027", "latest": "latest"},
-    {"name": "zarr", "distribution": "zarr", "module": "zarr", "lower": ">=3.1,<4", "latest": "latest"},
-    {"name": "pyarrow", "distribution": "pyarrow", "module": "pyarrow", "lower": ">=25,<26", "latest": "latest"},
-    {"name": "h5py", "distribution": "h5py", "module": "h5py", "lower": ">=3.8,<4", "latest": "latest"},
-    {"name": "h5netcdf", "distribution": "h5netcdf", "module": "h5netcdf", "lower": ">=1.5,<2", "latest": "latest"},
-    {"name": "netCDF4", "distribution": "netCDF4", "module": "netCDF4", "lower": ">=1.7,<2", "latest": "latest"},
-    {"name": "fastapi", "distribution": "fastapi", "module": "fastapi", "lower": ">=0.141,<1", "latest": "latest"},
-    {"name": "uvicorn", "distribution": "uvicorn", "module": "uvicorn", "lower": ">=0.35,<1", "latest": "latest"},
-    {"name": "jinja2", "distribution": "Jinja2", "module": "jinja2", "lower": ">=3.1,<4", "latest": "latest"},
-    {"name": "python-multipart", "distribution": "python-multipart", "module": "multipart", "lower": ">=0.0.20,<1", "latest": "latest"},
-    {"name": "httpx", "distribution": "httpx", "module": "httpx", "lower": ">=0.28,<1", "latest": "latest"}
-  ]
+    {
+      "name": "numpy",
+      "distribution": "numpy",
+      "module": "numpy",
+      "lower": {
+        "3.12": "==2.0.0",
+        "3.13": "==2.1.0"
+      },
+      "latest": "latest"
+    },
+    {
+      "name": "pandas",
+      "distribution": "pandas",
+      "module": "pandas",
+      "lower": {
+        "3.12": "==2.2.2",
+        "3.13": "==2.2.3"
+      },
+      "latest": "latest"
+    },
+    {
+      "name": "xarray",
+      "distribution": "xarray",
+      "module": "xarray",
+      "lower": {
+        "3.12": "==2026.7.0",
+        "3.13": "==2026.7.0"
+      },
+      "latest": "latest"
+    },
+    {
+      "name": "zarr",
+      "distribution": "zarr",
+      "module": "zarr",
+      "lower": {
+        "3.12": "==3.1.0",
+        "3.13": "==3.1.0"
+      },
+      "latest": "latest"
+    },
+    {
+      "name": "pyarrow",
+      "distribution": "pyarrow",
+      "module": "pyarrow",
+      "lower": {
+        "3.12": "==25.0.0",
+        "3.13": "==25.0.0"
+      },
+      "latest": "latest"
+    },
+    {
+      "name": "h5py",
+      "distribution": "h5py",
+      "module": "h5py",
+      "lower": {
+        "3.12": "==3.11.0",
+        "3.13": "==3.12.1"
+      },
+      "latest": "latest"
+    },
+    {
+      "name": "h5netcdf",
+      "distribution": "h5netcdf",
+      "module": "h5netcdf",
+      "lower": {
+        "3.12": "==1.5.0",
+        "3.13": "==1.5.0"
+      },
+      "latest": "latest"
+    },
+    {
+      "name": "netCDF4",
+      "distribution": "netCDF4",
+      "module": "netCDF4",
+      "lower": {
+        "3.12": "==1.7.3",
+        "3.13": "==1.7.2"
+      },
+      "latest": "latest"
+    },
+    {
+      "name": "fastapi",
+      "distribution": "fastapi",
+      "module": "fastapi",
+      "lower": {
+        "3.12": "==0.141.0",
+        "3.13": "==0.141.0"
+      },
+      "latest": "latest"
+    },
+    {
+      "name": "uvicorn",
+      "distribution": "uvicorn",
+      "module": "uvicorn",
+      "lower": {
+        "3.12": "==0.35.0",
+        "3.13": "==0.35.0"
+      },
+      "latest": "latest"
+    },
+    {
+      "name": "jinja2",
+      "distribution": "Jinja2",
+      "module": "jinja2",
+      "lower": {
+        "3.12": "==3.1.0",
+        "3.13": "==3.1.0"
+      },
+      "latest": "latest"
+    },
+    {
+      "name": "python-multipart",
+      "distribution": "python-multipart",
+      "module": "multipart",
+      "lower": {
+        "3.12": "==0.0.20",
+        "3.13": "==0.0.20"
+      },
+      "latest": "latest"
+    },
+    {
+      "name": "httpx",
+      "distribution": "httpx",
+      "module": "httpx",
+      "lower": {
+        "3.12": "==0.28.0",
+        "3.13": "==0.28.0"
+      },
+      "latest": "latest"
+    },
+    {
+      "name": "matplotlib",
+      "distribution": "matplotlib",
+      "module": "matplotlib",
+      "latest": "latest",
+      "lower": {
+        "3.12": "==3.8.4",
+        "3.13": "==3.9.2"
+      }
+    },
+    {
+      "name": "pint",
+      "distribution": "pint",
+      "module": "pint",
+      "latest": "latest",
+      "lower": {
+        "3.12": "==0.24.4",
+        "3.13": "==0.24.4"
+      }
+    }
+  ],
+  "lower_scope": "Exact feasible direct-dependency combinations; not proof of every declared minimum. See docs/v0.8-dependencies.md."
 }

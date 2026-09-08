@@ -17,6 +17,7 @@ import xarray as xr
 from ..data import ScientificDataset
 from ..exceptions import DataReadError, DataValidationError, OutputExistsError
 from ..formats import Selection
+from ..formats._selection import dimension_slices
 from ..schemas import ResolvedSchemaV2, SchemaV2, resolve_schema_v2, schema_v2_sha256
 
 _ROOT_ATTRIBUTES = (
@@ -280,9 +281,7 @@ def _read_group_array(
     path: Path,
     *,
     selected: bool,
-    slice_dimension: str | None,
-    start: int,
-    stop: int,
+    indices: dict[str, slice],
 ) -> tuple[tuple[str, ...], Any, dict[str, Any]] | None:
     item = group.get(name)
     if not isinstance(item, h5py.Dataset):
@@ -298,12 +297,7 @@ def _read_group_array(
         raise DataReadError(f"HDF5 2.0 field {name!r} shape does not match dimensions")
     if not selected:
         return None
-    values = item[...]
-    if slice_dimension is not None and slice_dimension in dimensions:
-        axis = dimensions.index(slice_dimension)
-        slices = [slice(None)] * len(dimensions)
-        slices[axis] = slice(start, stop)
-        values = values[tuple(slices)]
+    values = item[tuple(indices.get(d, slice(None)) for d in dimensions)]
     values = _decode_array(values)
     attributes: dict[str, Any] = {}
     unit = _text_attribute(item.attrs, "unit", path)
@@ -436,29 +430,15 @@ def load_hdf5_v2(path: str | Path, *, selection: Selection | None = None) -> Sci
                 if selected_variables
                 else next(iter(selected_coordinates), None)
             )
-            slice_dimension: str | None = None
-            if selection and (selection.start is not None or selection.stop is not None):
-                if first_field is None:
-                    raise DataReadError("HDF5 2.0 record slicing requires a selected field")
-                field_group = (
-                    variables_group if first_field in variables_group else coordinates_group
-                )
-                dims = _json_attribute(
+            field_group = variables_group if first_field in variables_group else coordinates_group
+            first_dims = (
+                _json_attribute(
                     field_group[first_field].attrs, "dims_json", input_path, object_only=False
                 )
-                if not dims:
-                    raise DataReadError("HDF5 2.0 record slicing requires a non-scalar field")
-                slice_dimension = dims[0]
-                record_length = lengths[slice_dimension]
-                start = selection.start if selection.start is not None else 0
-                stop = selection.stop if selection.stop is not None else record_length
-                if stop > record_length:
-                    raise DataReadError(
-                        f"HDF5 2.0 selection bounds must fit {slice_dimension}={record_length}"
-                    )
-            else:
-                start = 0
-                stop = lengths[slice_dimension] if slice_dimension else 0
+                if first_field is not None
+                else ()
+            )
+            indices = dimension_slices(lengths, first_dims, selection, label="HDF5 2.0")
             data_vars: dict[str, Any] = {}
             for name in selected_variables:
                 result = _read_group_array(
@@ -467,9 +447,7 @@ def load_hdf5_v2(path: str | Path, *, selection: Selection | None = None) -> Sci
                     lengths,
                     input_path,
                     selected=True,
-                    slice_dimension=slice_dimension,
-                    start=start,
-                    stop=stop,
+                    indices=indices,
                 )
                 if result is None:
                     continue
@@ -483,9 +461,7 @@ def load_hdf5_v2(path: str | Path, *, selection: Selection | None = None) -> Sci
                     lengths,
                     input_path,
                     selected=True,
-                    slice_dimension=slice_dimension,
-                    start=start,
-                    stop=stop,
+                    indices=indices,
                 )
                 if result is None:
                     continue

@@ -1,24 +1,16 @@
 from __future__ import annotations
 
-import importlib.util
-import sys
+import importlib
 from pathlib import Path
 
 import pytest
 
 from cpdatakit.model import Dataset
 
-FORMATS = Path(__file__).parents[1] / "src" / "cpdatakit" / "formats" / "base.py"
-
 
 def _load_formats():
-    spec = importlib.util.spec_from_file_location("cpdatakit.formats.base", FORMATS)
-    if spec is None or spec.loader is None:
-        raise AssertionError(f"cannot load format interfaces: {FORMATS}")
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
+    # Exercise the installed package in wheel acceptance environments.
+    return importlib.import_module("cpdatakit.formats.base")
 
 
 def test_format_metadata_is_immutable_and_limits_are_positive() -> None:

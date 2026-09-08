@@ -21,8 +21,11 @@ from .application import (
     SchemaDiffRequest,
     convert_and_write,
     diff_schema_contracts,
+    draft_schema,
     import_and_inspect,
     plot_declared_fields,
+    preview_mapping,
+    run_batch,
     validate_and_summarize,
 )
 from .application import (
@@ -60,6 +63,12 @@ def _parser() -> argparse.ArgumentParser:
         "--debug", action="store_true", help="Show tracebacks for unexpected failures"
     )
     commands = parser.add_subparsers(dest="command", required=True)
+    batch = commands.add_parser("batch", help="Run reproducible per-file conversions from JSON")
+    batch.add_argument("config", type=Path)
+    batch.add_argument("--manifest", type=Path, required=True)
+    batch.add_argument(
+        "--retry", action="store_true", help="Resume using verified results in this manifest"
+    )
     validate = commands.add_parser("validate", help="Validate schema conformance")
     _common(validate)
     validate.add_argument("--json-output", type=Path, help="Write the validation report as JSON")
@@ -104,6 +113,20 @@ def _parser() -> argparse.ArgumentParser:
     compare.add_argument("--force", action="store_true", help="Replace an existing bundle")
     schema = commands.add_parser("schema", help="Compare schema contracts")
     schema_commands = schema.add_subparsers(dest="schema_command", required=True)
+    draft = schema_commands.add_parser(
+        "draft", help="Draft a schema from observable file structure"
+    )
+    draft.add_argument("data", type=Path)
+    draft.add_argument("--output", type=Path)
+    draft.add_argument("--force", action="store_true")
+    mapping = commands.add_parser("mapping", help="Preview declared field and unit mappings")
+    mapping_commands = mapping.add_subparsers(dest="mapping_command", required=True)
+    preview = mapping_commands.add_parser(
+        "preview", help="Normalize and validate without writing data"
+    )
+    _common(preview)
+    preview.add_argument("--output", type=Path)
+    preview.add_argument("--force", action="store_true")
     schema_diff = schema_commands.add_parser("diff", help="Compare two schema contracts")
     schema_diff.add_argument("source", type=Path)
     schema_diff.add_argument("target", type=Path)
@@ -264,6 +287,20 @@ def _run_ui(args: argparse.Namespace) -> int:
 
 
 def _run(args: argparse.Namespace) -> int:
+    if args.command == "batch":
+        result = run_batch(args.config, args.manifest, retry=args.retry)
+        print(json.dumps(result.to_dict(), indent=2))
+        return 0 if result.ok else 1 if result.value is not None else 2
+    if args.command == "mapping" or (args.command == "schema" and args.schema_command == "draft"):
+        result = (
+            draft_schema(ImportInspectRequest(args.data))
+            if args.command == "schema"
+            else preview_mapping(DatasetRequest(args.data, args.schema, args.mapping))
+        )
+        if not result.ok:
+            raise CPDataKitError(result.error.message)
+        _write_json(result.value, args.output, args.force)
+        return 0 if args.command == "schema" or result.value["validation"]["valid"] else 1
     if args.command == "ui":
         return _run_ui(args)
     if args.command == "compare":

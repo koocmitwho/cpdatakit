@@ -35,11 +35,14 @@ from ..application import (
 )
 from ..application.data_access import path_sha256
 from ..catalog import ProjectRecord, SQLiteCatalog
-from ..exceptions import CatalogError, JobError, SchemaError
+from ..exceptions import CatalogError, CPDataKitError, JobError, SchemaError
 from ..jobs import JobManager
-from ..jobs.manager import JobFailure
+from ..jobs.manager import CommittedResult, JobFailure
 from ..provenance import sha256_file
 from ..schema import ProfileSchema
+from .authoring import install_authoring, store_mapping
+from .outputs import convert_registered
+from .slices import install_slices
 from .workbench import install_workbench, select_schema
 
 _SESSION_COOKIE: Final = "cpdatakit_session"
@@ -288,6 +291,8 @@ def create_app(
             result = function(cancel)
             if result.get("status") == "failed":
                 raise JobFailure(result["error"]["message"], result=result)
+            if result.get("artifact"):
+                return CommittedResult(result)
             return result
 
         try:
@@ -636,6 +641,7 @@ def create_app(
         schema_name: Annotated[str, Form(alias="schema")] = "curve",
         force: Annotated[bool, Form()] = False,
         output_format: Annotated[str, Form()] = "hdf5",
+        mapping_json: Annotated[str, Form()] = "",
         csrf_token_form: Annotated[str | None, Form(alias="csrf_token")] = None,
     ) -> Response:
         csrf_error = require_csrf(request, csrf_token_form)
@@ -675,10 +681,20 @@ def create_app(
                 "Confirm overwrite explicitly before retrying.",
             )
 
+        try:
+            mapping = store_mapping(app, project_id, mapping_json)
+        except (CPDataKitError, ValueError):
+            return _json_error(
+                400,
+                "invalid_mapping",
+                "Mapping JSON is invalid.",
+                "Preview the mapping before conversion.",
+            )
+
         def work(cancel) -> dict[str, object]:
             if cancel.is_set():
                 return {"status": "cancelled"}
-            result = convert_and_write(
+            result = convert_registered(
                 ConvertRequest(
                     data=source,
                     schema=schema,
@@ -686,15 +702,17 @@ def create_app(
                     workspace=workspace_path,
                     force=force,
                     output_format=output_format,
-                )
-            )
-            if result.ok and target.exists():
-                artifact_registration(
+                    mapping=mapping,
+                ),
+                cancel,
+                convert=convert_and_write,
+                register=lambda path: artifact_registration(
                     project_id,
-                    target,
+                    path,
                     kind="convert",
-                    metadata={"operation": result.operation, "schema": schema_name},
-                )
+                    metadata={"operation": "convert_and_write", "schema": schema_name},
+                ),
+            )
             return result.to_dict()
 
         return queue_job(
@@ -987,6 +1005,15 @@ def create_app(
         response = JSONResponse(_job_payload(record))
         return _set_session_cookie(response, session_token)
 
+    install_authoring(app, dataset_path=dataset_path, require_csrf=require_csrf)
+    install_slices(
+        app,
+        dataset_path=dataset_path,
+        output_path=output_path,
+        require_csrf=require_csrf,
+        queue_job=queue_job,
+        artifact_registration=artifact_registration,
+    )
     install_workbench(
         app,
         templates,

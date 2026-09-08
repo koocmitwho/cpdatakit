@@ -1,4 +1,7 @@
 .venv/
+.artifacts/
+.playwright-cli/
+output/playwright/
 __pycache__/
 *.py[cod]
 *.egg-info/

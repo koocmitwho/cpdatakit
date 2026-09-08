@@ -2,12 +2,12 @@ cff-version: 1.2.0
 message: "If you use CPDataKit, please cite this software."
 title: "CPDataKit: Scientific and Engineering Data Contract Toolkit"
 type: software
-version: 0.7.0
-date-released: 2026-09-06
+version: 0.8.0
+date-released: 2026-09-08
 authors:
   - name: "CPDataKit contributors"
 license: Apache-2.0
-repository-code: "https://github.com/17636365690/cpdatakit"
+repository-code: "https://github.com/koocmitwho/cpdatakit"
 keywords:
   - scientific data
   - engineering data

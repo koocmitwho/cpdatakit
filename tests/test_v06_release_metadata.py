@@ -32,9 +32,9 @@ def test_v06_version_and_runtime_dependency_metadata() -> None:
         "xarray>=2026.7,<2027",
         "zarr>=3.1,<4",
         "pyarrow>=25,<26",
-        "h5py>=3.8,<4",
+        "h5py>=3.11,<4",
         "h5netcdf>=1.5,<2",
-        "netCDF4>=1.7,<2",
+        "netCDF4>=1.7.2,<2",
         "fastapi>=0.141,<1",
         "uvicorn>=0.35,<1",
         "Jinja2>=3.1,<4",
@@ -95,3 +95,15 @@ def test_v06_mainline_docs_close_preflight_claims_after_release() -> None:
     assert "Next probe gate" not in probe
     assert schemas.startswith("# CPDataKit schema 2.0\n")
     assert hdf5.startswith("# CPDataKit HDF5 2.0\n")
+
+
+def test_runtime_requirements_exclude_reproduced_numpy2_import_failures():
+    from packaging.requirements import Requirement
+
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+    requirements = {item.name: item.specifier for item in map(Requirement, project["dependencies"])}
+    assert "3.10.0" not in requirements["h5py"]
+    assert "0.23" not in requirements["pint"]
+    assert "0.24.3" not in requirements["pint"]
+    assert "3.11.0" in requirements["h5py"]
+    assert "0.24.4" in requirements["pint"]

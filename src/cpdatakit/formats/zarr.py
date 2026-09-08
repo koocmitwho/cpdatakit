@@ -12,6 +12,7 @@ from typing import Any
 from ..data import ScientificDataset
 from ..exceptions import DataReadError, DataValidationError, OutputExistsError
 from ._metadata import scientific_for_write, scientific_metadata
+from ._selection import describe_xarray, materialize, select_xarray
 from .base import CapabilityResult, DetectionResult, ReaderInfo, ReadLimits, Selection, WriterInfo
 
 
@@ -44,28 +45,6 @@ def _metadata(dataset: Any) -> dict[str, Any]:
     return scientific_metadata(dataset, format="Zarr 3")
 
 
-def _selected(dataset: Any, selection: Selection | None) -> Any:
-    if selection and selection.fields:
-        unknown = [name for name in selection.fields if name not in dataset.variables]
-        if unknown:
-            raise DataReadError(f"Unknown Zarr selection fields: {unknown}")
-        dataset = dataset[list(selection.fields)]
-    if selection and (selection.start is not None or selection.stop is not None):
-        fields = (
-            tuple(selection.fields) if selection and selection.fields else tuple(dataset.data_vars)
-        )
-        if not fields or not dataset[fields[0]].dims:
-            raise DataReadError("Zarr record selection requires a non-scalar field")
-        dimension = dataset[fields[0]].dims[0]
-        length = int(dataset.sizes[dimension])
-        start = selection.start if selection.start is not None else 0
-        stop = selection.stop if selection.stop is not None else length
-        if stop > length:
-            raise DataReadError(f"Zarr selection bounds must fit {dimension}={length}")
-        dataset = dataset.isel({dimension: slice(start, stop)})
-    return dataset
-
-
 class ZarrReader:
     """Read local Zarr format 3 stores without consolidated-metadata assumptions."""
 
@@ -91,7 +70,7 @@ class ZarrReader:
         xarray = _xarray()
         _zarr()
         try:
-            with xarray.open_zarr(input_path, consolidated=False) as dataset:
+            with xarray.open_zarr(input_path, consolidated=False, chunks=None) as dataset:
                 data_variables = tuple(dataset.data_vars)
                 record_count = (
                     int(dataset[data_variables[0]].sizes[dataset[data_variables[0]].dims[0]])
@@ -104,6 +83,7 @@ class ZarrReader:
                     "format": "Zarr 3",
                     "dimensions": {name: int(length) for name, length in dataset.sizes.items()},
                     "variables": list(dataset.variables),
+                    "field_details": describe_xarray(dataset),
                     "record_count": record_count,
                     "store_entries": sum(1 for item in input_path.rglob("*") if item.is_file()),
                 }
@@ -112,17 +92,18 @@ class ZarrReader:
         except (OSError, ValueError, TypeError) as exc:
             raise DataReadError(f"Cannot inspect Zarr input {input_path}: {exc}") from exc
 
-    def load(self, path: Path, *, selection: Selection | None = None) -> ScientificDataset:
+    def load(
+        self, path: Path, *, selection: Selection | None = None, context=None
+    ) -> ScientificDataset:
         input_path = Path(path)
         _check_path(input_path)
         xarray = _xarray()
         _zarr()
         try:
-            with xarray.open_zarr(input_path, consolidated=False) as opened:
-                dataset = opened.load()
-            dataset = _selected(dataset, selection)
+            with xarray.open_zarr(input_path, consolidated=False, chunks=None) as opened:
+                dataset = materialize(select_xarray(opened, selection, label="Zarr"), context)
             metadata = _metadata(dataset)
-            return ScientificDataset(dataset.copy(deep=True), metadata, input_path)
+            return ScientificDataset(dataset, metadata, input_path)
         except DataReadError:
             raise
         except (OSError, ValueError, TypeError, KeyError) as exc:
