@@ -1,0 +1,292 @@
+{
+  "bundle_version": 1,
+  "integration_kind": "owned-repository integration",
+  "upstream_repository": "https://github.com/17636365690/experiment-to-cpfe-pipeline",
+  "upstream_release": "v0.1.0",
+  "upstream_commit": "47dc839f29de1cb3b5570a04fefbb8dc82050c71",
+  "source_doi": "10.5281/zenodo.10820299",
+  "license": "CC-BY-4.0",
+  "source_authors": [
+    "Hossein Beygi Nasrabadi",
+    "Felix Bauer",
+    "Ladji Tikana",
+    "Patrick Uhlemann",
+    "Steffen Thärig",
+    "Birgit Rehmer",
+    "Birgit Skrotzki"
+  ],
+  "units": {
+    "strain": "1",
+    "stress": "MPa"
+  },
+  "strain_definition": "engineering strain from preload origin",
+  "stress_definition": "nominal stress increment from preload origin",
+  "strain_window": [
+    0,
+    0.008
+  ],
+  "experiment_roles": {
+    "H_08": "calibration",
+    "H_16": "model_check",
+    "H_18": "final_holdout"
+  },
+  "processing": {
+    "experiment": "first-pair origin subtraction, increasing loading subsequence, fixed 161-point grid; existing processed values copied without changes",
+    "training": "linear interpolation of each FE curve on a fixed 81-point strain grid",
+    "target": "sum of top-face RF3 / initial area in MPa",
+    "features": "engineering_strain, E, yield_stress, plastic_modulus; units 1, MPa, MPa, MPa"
+  },
+  "files": {
+    "experimental-curves.json": "26fc1b5ddbca29206d6ca1cabed008ef4db68210e5082c5b66e072da02d65dc1",
+    "surrogate-data.npz": "18258b61112f187ddf0f74ebd1eeefc04accec6de34ec88bfb2e460edc643948",
+    "training-config.json": "1319fe0320caaf09fac14130eb7cdd915afb6a1f613982f2cdffffc174831140",
+    "upstream-summary.json": "11401152157b78209ff0f97182f2da76fe386a10c9a30d0051afd8fdb8d0ad19"
+  },
+  "raw_sources": {
+    "H_08": {
+      "member": "Tensile test/Primary data/Tensile_H_08.lis",
+      "sha256": "238f1fb1dd31475c4046389384baa38dceec160d237d9216b2cdf5aae4267ac5"
+    },
+    "H_16": {
+      "member": "Tensile test/Primary data/Tensile_H_16.lis",
+      "sha256": "ef04ca52a87c5e086c535db5375abd209fa3b13672bcc1a393b4c526f996f0df"
+    },
+    "H_18": {
+      "member": "Tensile test/Primary data/Tensile_H_18.lis",
+      "sha256": "4260d59bcf9296dad43d06a277d7afc826fb42f83eccd788ece602d1fd5026bd"
+    }
+  },
+  "source_records_sha256": "56c84c50cd77743d87bdce7282618443bbdbd8c8983640bf0b0380353198f6f3",
+  "evidence": [
+    {
+      "case": "base",
+      "split": "train",
+      "completed_stages": 7,
+      "artifacts": {
+        "dataset/sample.h5": "2d90e967e7233f8cd21dd471f919c88de89fe299a0901c3b3d50287078e39bc7",
+        "solver/analysis/gauge.odb": "f85554aa5bfc1eb49605538801ddc1c392333ce35ebbaa38a9bad686d040c35b"
+      },
+      "axial_response_sha256": "7cb73470b8b37a96b5bc07a4d08c04fe45fdc133d46b1a4947385367a2f2ed0e",
+      "axial_validation": {
+        "rmse": 2.972006648081847e-06,
+        "mae": 2.262903858659492e-06,
+        "bias": 2.4810839345083722e-08,
+        "max_abs_error": 7.064618699814673e-06,
+        "nrmse": 1.646178714683654e-08,
+        "r2": 0.9999999999999966,
+        "count": 41
+      }
+    },
+    {
+      "case": "low",
+      "split": "train",
+      "completed_stages": 7,
+      "artifacts": {
+        "dataset/sample.h5": "d986328243fcb57be722ee00204f83cb74c4f61096d9b88c7d175a2458b754a6",
+        "solver/analysis/gauge.odb": "2102ffd9ef78f254d8a0e6ba36cb0e5aa216cc2020058f98b1c6048e599eb84f"
+      },
+      "axial_response_sha256": "b9e1227dcd75a4aa145c6f1d4aa8838aeb2bc0a0d1ecd0e4c7de15e4232d8574",
+      "axial_validation": {
+        "rmse": 3.295339830628126e-06,
+        "mae": 2.666813151446668e-06,
+        "bias": -4.050772455460729e-07,
+        "max_abs_error": 7.019522229256836e-06,
+        "nrmse": 2.0280791656484976e-08,
+        "r2": 0.9999999999999947,
+        "count": 41
+      }
+    },
+    {
+      "case": "high",
+      "split": "train",
+      "completed_stages": 7,
+      "artifacts": {
+        "dataset/sample.h5": "37bae24610bab8751b30e4e164bd6147697e97f59fb2dafbceaacfc6f80f7d3b",
+        "solver/analysis/gauge.odb": "ce88d025a565d770bc355bdea228b81317f54467f1e5e170338b92ab1860d040"
+      },
+      "axial_response_sha256": "a3b46816d7032f05359396596330684c7adb3fefe12cee09b52b324a317fd17e",
+      "axial_validation": {
+        "rmse": 3.844957723071421e-06,
+        "mae": 3.044681945132627e-06,
+        "bias": -2.0794002942290173e-07,
+        "max_abs_error": 1.0063829492423793e-05,
+        "nrmse": 2.0107276227350477e-08,
+        "r2": 0.9999999999999948,
+        "count": 41
+      }
+    },
+    {
+      "case": "soft_yield_high",
+      "split": "train",
+      "completed_stages": 7,
+      "artifacts": {
+        "dataset/sample.h5": "1ceaadbbf0f277ce2b9dae835220ea96edb084f171d43c00cdc64109fe01e973",
+        "solver/analysis/gauge.odb": "7377d92beae37ef57b08ec421e91112391f903b36a6d6ae31184958258389f27"
+      },
+      "axial_response_sha256": "c7c71748a7cc14e52c3dd2c9e6f276cea46c71b69356c26baab2ec550b18d49a",
+      "axial_validation": {
+        "rmse": 3.7866917583827632e-06,
+        "mae": 3.062246227952137e-06,
+        "bias": 3.1779317133384666e-07,
+        "max_abs_error": 1.056187642234363e-05,
+        "nrmse": 1.9633867310237407e-08,
+        "r2": 0.9999999999999956,
+        "count": 41
+      }
+    },
+    {
+      "case": "stiff_yield_low",
+      "split": "train",
+      "completed_stages": 7,
+      "artifacts": {
+        "dataset/sample.h5": "11757869c232e0d008e9b2427c865c24632724c22e810f2e2fc52c6efc31f417",
+        "solver/analysis/gauge.odb": "7d12d6407143350c9cf5cac5a056f2c113c057232d5516e73f8af63d8461bb3d"
+      },
+      "axial_response_sha256": "150051f782b2c69f62583e2cb282b68ae80a81dc32e0a3c68c9455bf14aa905f",
+      "axial_validation": {
+        "rmse": 4.147758616005203e-06,
+        "mae": 3.528327903363608e-06,
+        "bias": 1.8742565068732774e-06,
+        "max_abs_error": 1.0063829492423793e-05,
+        "nrmse": 2.376881761941731e-08,
+        "r2": 0.9999999999999918,
+        "count": 41
+      }
+    },
+    {
+      "case": "val_a",
+      "split": "validation",
+      "completed_stages": 7,
+      "artifacts": {
+        "dataset/sample.h5": "9c7d6967c95f11dde663ae282073606c05830fdc62f34af221d48b847ee40b77",
+        "solver/analysis/gauge.odb": "f5a05cf04b529e1651485df64a890d51ca3117e6cd15b577ccf0667f63827381"
+      },
+      "axial_response_sha256": "daa6336181616d5b42e148bf6e07f447a6f21b1635e05a9473bf88a85717a0fc",
+      "axial_validation": {
+        "rmse": 3.4414815183319866e-06,
+        "mae": 2.800876400490754e-06,
+        "bias": 7.828692150048355e-07,
+        "max_abs_error": 7.222225633540802e-06,
+        "nrmse": 1.9013935396526103e-08,
+        "r2": 0.9999999999999954,
+        "count": 41
+      }
+    },
+    {
+      "case": "val_b",
+      "split": "validation",
+      "completed_stages": 7,
+      "artifacts": {
+        "dataset/sample.h5": "682a322e7a984af76fdc0bf286ca5027dc843f7ed02d16b7d74d82373261dd33",
+        "solver/analysis/gauge.odb": "30cd4d2b2b7c0470f32e1e68d45ac1cb120f53ac8dcea311fbe38100bd8600af"
+      },
+      "axial_response_sha256": "8bd81cb09371bacf3509172c232626d7abe0fd4fd9cf4ceba29d1bde3368da3c",
+      "axial_validation": {
+        "rmse": 3.424708933806176e-06,
+        "mae": 2.7696932246443815e-06,
+        "bias": -4.851914164097562e-07,
+        "max_abs_error": 9.606382675997338e-06,
+        "nrmse": 1.904476673797475e-08,
+        "r2": 0.9999999999999952,
+        "count": 41
+      }
+    },
+    {
+      "case": "test_a",
+      "split": "test",
+      "completed_stages": 7,
+      "artifacts": {
+        "dataset/sample.h5": "b855b808ec4713432ef6b039333c0c23a55763d7be4b7fe134f38ad01b470495",
+        "solver/analysis/gauge.odb": "88dc8705cb6a97a47c22172d556169505b061f55aa8f17df71b3f2108f4f5819"
+      },
+      "axial_response_sha256": "116eb4472d6fa630f2676cf43ca796f90b652c69746e2a7431b6f2c0f47ae6f4",
+      "axial_validation": {
+        "rmse": 3.2100788286067524e-06,
+        "mae": 2.433704232395493e-06,
+        "bias": -8.680415142237052e-08,
+        "max_abs_error": 6.87721839653932e-06,
+        "nrmse": 1.8203557244690447e-08,
+        "r2": 0.9999999999999956,
+        "count": 41
+      }
+    },
+    {
+      "case": "test_b",
+      "split": "test",
+      "completed_stages": 7,
+      "artifacts": {
+        "dataset/sample.h5": "a23e0420a7324c911b8c905ae298089363746ad881169c95ccb9f266e991e92d",
+        "solver/analysis/gauge.odb": "6d37ce88c0d70b0e52f78652c9f1194bcc68ea5cde8d844a4fa9495059a9e894"
+      },
+      "axial_response_sha256": "53a25e42cbe106ac6bc6fd29fdae119bee4f63633f9730314773fc37c772cf55",
+      "axial_validation": {
+        "rmse": 0.0007190455710460992,
+        "mae": 0.00011471422319790817,
+        "bias": 0.00011229432639412235,
+        "max_abs_error": 0.004604093417128752,
+        "nrmse": 3.891098474495406e-06,
+        "r2": 0.9999999998106516,
+        "count": 41
+      }
+    },
+    {
+      "case": "nu_low",
+      "split": "sensitivity",
+      "completed_stages": 7,
+      "artifacts": {
+        "dataset/sample.h5": "2f31b03619435038cd0f38c21af3e50b335946d099ad43ed59ea766abb06c256",
+        "solver/analysis/gauge.odb": "27966c95813ca88c7905e5d500a12199d794a361caa2f03ece5aed3f134dade4"
+      },
+      "axial_response_sha256": "7cb73470b8b37a96b5bc07a4d08c04fe45fdc133d46b1a4947385367a2f2ed0e",
+      "axial_validation": {
+        "rmse": 2.972006648081847e-06,
+        "mae": 2.262903858659492e-06,
+        "bias": 2.4810839345083722e-08,
+        "max_abs_error": 7.064618699814673e-06,
+        "nrmse": 1.646178714683654e-08,
+        "r2": 0.9999999999999966,
+        "count": 41
+      }
+    },
+    {
+      "case": "nu_high",
+      "split": "sensitivity",
+      "completed_stages": 7,
+      "artifacts": {
+        "dataset/sample.h5": "a36579897ef2105d3c4409cea49d510930153c505772101054dc475710dd3ff0",
+        "solver/analysis/gauge.odb": "f9a1889405a750cb0b794e6ef5fd44a121281d515817290071458a94c02c3f3a"
+      },
+      "axial_response_sha256": "7cb73470b8b37a96b5bc07a4d08c04fe45fdc133d46b1a4947385367a2f2ed0e",
+      "axial_validation": {
+        "rmse": 2.972006648081847e-06,
+        "mae": 2.262903858659492e-06,
+        "bias": 2.4810839345083722e-08,
+        "max_abs_error": 7.064618699814673e-06,
+        "nrmse": 1.646178714683654e-08,
+        "r2": 0.9999999999999966,
+        "count": 41
+      }
+    },
+    {
+      "case": "mesh8",
+      "split": "mesh_check",
+      "completed_stages": 7,
+      "artifacts": {
+        "dataset/sample.h5": "b8858227697b68d4739d0606f14fbfabf64d07b29a842e7b0e7469ed85f720cf",
+        "solver/analysis/gauge.odb": "33a7c53a3d692ebd9d6787460752906cc5099b7c7edabaf97164855f100e57f8"
+      },
+      "axial_response_sha256": "7cb73470b8b37a96b5bc07a4d08c04fe45fdc133d46b1a4947385367a2f2ed0e",
+      "axial_validation": {
+        "rmse": 2.972006648081847e-06,
+        "mae": 2.262903858659492e-06,
+        "bias": 2.4810839345083722e-08,
+        "max_abs_error": 7.064618699814673e-06,
+        "nrmse": 1.646178714683654e-08,
+        "r2": 0.9999999999999966,
+        "count": 41
+      }
+    }
+  ],
+  "evidence_scope": "hashes checked against local run manifests on 2026-09-07; bundled data can be rechecked offline; original ODB is not redistributed",
+  "physical_scope": "homogeneous square gauge, small-strain isotropic bilinear plasticity; no crystal-plasticity validation claim"
+}

@@ -45,7 +45,7 @@ jobs:
       - run: wheel-env/bin/python -c "from cpdatakit.web import create_app; print(create_app('ui-smoke').title)"
 
   minimum-dependencies:
-    name: Minimum supported dependencies
+    name: Minimum supported dependencies (feasible combination)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -53,29 +53,14 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - name: Install lower-bound runtime and test dependencies
-        run: |
-          python -m pip install \
-            "numpy>=2.0,<3" \
-            "pandas>=2.2,<3" \
-            "h5py>=3.8,<4" \
-            "matplotlib>=3.7" \
-            "pint>=0.22" \
-            "xarray>=2026.7,<2027" \
-            "zarr>=3.1,<4" \
-            "pyarrow>=25,<26" \
-            "h5netcdf>=1.5,<2" \
-            "netCDF4>=1.7,<2" \
-            "fastapi>=0.141,<1" \
-            "uvicorn>=0.35,<1" \
-            "Jinja2>=3.1,<4" \
-            "python-multipart>=0.0.20,<1" \
-            "pytest>=7.4" \
-            "pytest-cov>=4.1" \
-            "hypothesis>=6.100" \
-            "httpx>=0.28,<1"
-      - run: python -m pip install -e . --no-deps
-      - run: pytest
+      - name: Test exact feasible lower combination
+        run: python scripts/run_v06_dependency_matrix.py --candidate-set lower --output matrix-minimum.json
+      - name: Upload lower combination evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: minimum-dependencies
+          path: matrix-minimum*
 
   quality-and-build:
     runs-on: ubuntu-latest

@@ -1,4 +1,4 @@
-name: v0.6 dependency matrix
+name: Dependency compatibility matrix
 
 on:
   push:
@@ -28,7 +28,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-      - name: Run isolated wheel-only dependency probe
+      - name: Test candidate wheel with exact lower or latest dependencies
         run: >-
           python scripts/run_v06_dependency_matrix.py
           --candidate-set ${{ matrix.dependency-set }}
@@ -38,4 +38,4 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: v06-dependency-${{ matrix.os }}-py${{ matrix.python-version }}-${{ matrix.dependency-set }}
-          path: matrix-*.json
+          path: matrix-*

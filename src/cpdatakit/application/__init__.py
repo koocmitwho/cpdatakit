@@ -1,5 +1,7 @@
 """Typed application services shared by CPDataKit edges."""
 
+from .authoring import draft_schema, preview_mapping
+from .batch import run_batch
 from .capabilities import (
     CapabilityDiscovery,
     CapabilityItem,
@@ -34,6 +36,8 @@ from .services import (
     resolve_schema_and_mapping,
     validate_and_summarize,
 )
+from .slices import SliceRequest, plot_scientific_slice
+from .tensile import integrate_tensile_bundle
 
 __all__ = [
     "CapabilityDiscovery",
@@ -56,14 +60,20 @@ __all__ = [
     "SchemaDiffRequest",
     "ServiceError",
     "ServiceResult",
+    "SliceRequest",
     "ValidationSummary",
     "build_report",
     "compare_reports",
     "convert_and_write",
     "diff_schema_contracts",
     "discover_capabilities",
+    "draft_schema",
     "import_and_inspect",
+    "integrate_tensile_bundle",
     "plot_declared_fields",
+    "plot_scientific_slice",
+    "preview_mapping",
     "resolve_schema_and_mapping",
+    "run_batch",
     "validate_and_summarize",
 ]

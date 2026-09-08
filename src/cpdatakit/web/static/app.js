@@ -1,3 +1,6 @@
+import {setupFields, showSliceResult} from './fields.js';
+import {setupAuthoring} from './authoring.js';
+
 const csrf = document.querySelector('[name="csrf_token"]')?.value;
 const projectId = document.body.dataset.projectId;
 const schema = document.querySelector('#schema');
@@ -78,6 +81,8 @@ async function refreshResources(selectedDataset) {
     artifacts.append(row);
   }
   if (!project.artifacts.length) artifacts.append(element('p', 'Converted data and reports will appear here.', 'hint'));
+  document.dispatchEvent(new Event('datasets-refreshed'));
+  return project;
 }
 
 const watching = new Set();
@@ -91,12 +96,13 @@ async function followJob(id) {
   try {
     while (true) {
       const job = await request(`/api/jobs/${id}`);
-      row.replaceChildren(element('span', `${job.operation} · ${job.status} · ${job.output_filename || ''} `));
+      row.replaceChildren(element('span', `${job.operation} · ${job.status} · ${job.operation_log?.at(-1) || ''} · ${job.output_filename || ''} `));
       if (['succeeded', 'failed', 'cancelled'].includes(job.status)) {
         const button = element('button', 'View details', 'secondary'); button.type = 'button';
         button.addEventListener('click', () => showResult(`Job ${job.status}`, job.result || job));
         row.append(button);
-        await refreshResources();
+        const project = await refreshResources();
+        showSliceResult(job.result, project);
         if (job.result) showResult(`Job ${job.status}`, job.result);
         break;
       }
@@ -131,6 +137,7 @@ document.querySelectorAll('form[data-operation]').forEach(form => {
     const button = form.querySelector('button'); button.disabled = true;
     const operation = form.dataset.operation; const data = new FormData(form);
     data.set('schema', schema.value); data.set('dataset_id', dataset.value);
+    if (operation === 'convert') data.set('mapping_json', document.querySelector('#mapping-json').value);
     if (operation === 'zarr') {
       data.delete('files');
       for (const file of form.querySelector('input[type="file"]').files) data.append('files', file, file.webkitRelativePath);
@@ -162,3 +169,5 @@ document.querySelector('#report-format')?.addEventListener('change', event => {
   const output = document.querySelector('#report-output'); output.value = output.value.replace(/\.[^/.]+$/, '') + suffix;
 });
 if (projectId) document.querySelectorAll('[data-job-id]').forEach(row => void followJob(row.dataset.jobId));
+setupFields({request, showResult, followJob});
+setupAuthoring({request, showResult});

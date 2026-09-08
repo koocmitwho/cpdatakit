@@ -75,6 +75,45 @@
         </form>
       </div>
     </section>
+    <section id="schema-authoring">
+      <h2>Review schema and field mapping</h2>
+      <p class="hint">Build a schema from the file's fields and dimensions. Check units and fill in missing roles before saving.</p>
+      <button id="draft-schema" type="button" class="secondary" data-needs-dataset {% if not datasets %}disabled{% endif %}>Draft schema from dataset</button>
+      <p id="authoring-status" role="status"></p>
+      <div id="draft-editor" hidden>
+        <details><summary>Declarations to review</summary><ul id="schema-review"></ul></details>
+        <label for="schema-draft-json">Editable schema JSON</label><textarea id="schema-draft-json" rows="12" spellcheck="false"></textarea>
+        <button id="save-draft" type="button">Save reviewed schema</button>
+      </div>
+      <details><summary>Field mapping for conversion</summary>
+        <p class="hint">Use the JSON below to rename fields or convert units. For multidimensional data, set mapping_version to 2.0 and put dimension renames in dimensions. Arrays follow the target schema's dimension order.</p>
+        <label for="mapping-json">Mapping JSON (optional)</label><textarea id="mapping-json" rows="8" spellcheck="false" placeholder='{"mappings": []}'></textarea>
+        <button id="preview-mapping" type="button" class="secondary" data-needs-dataset {% if not datasets %}disabled{% endif %}>Preview mapping</button>
+        <p class="hint">Preview checks the full input within the size limits and shows up to five values per field. Click Convert dataset to apply this mapping.</p>
+        <div id="mapping-preview" class="table-scroll" hidden><table><thead><tr><th>Source</th><th>Target</th><th>Units</th><th>Dimensions</th><th>Values before → after</th></tr></thead><tbody></tbody></table></div>
+      </details>
+    </section>
+    <section id="field-viewer">
+      <h2>Explore a multidimensional field</h2>
+      <p class="hint">Choose a variable and two axes, then set the remaining dimensions, such as the time step. The heatmap loads that slice.</p>
+      <button id="load-field" type="button" class="secondary" data-needs-dataset {% if not datasets %}disabled{% endif %}>Load field controls</button>
+      <p id="field-status" role="status"></p>
+      <form id="slice-form" hidden>
+        <label for="field-variable">Variable</label><select id="field-variable" name="variable"></select>
+        <div class="workflow-grid">
+          <div><label for="field-x">Horizontal dimension</label><select id="field-x" name="x"></select></div>
+          <div><label for="field-y">Vertical dimension</label><select id="field-y" name="y"></select></div>
+        </div>
+        <div id="slice-indices" class="workflow-grid"></div>
+        <div class="workflow-grid">
+          <div><label for="color-min">Color minimum</label><input id="color-min" name="vmin" type="number" step="any" placeholder="Automatic"></div>
+          <div><label for="color-max">Color maximum</label><input id="color-max" name="vmax" type="number" step="any" placeholder="Automatic"></div>
+        </div>
+        <label for="color-map">Color map</label><select id="color-map" name="cmap"><option>viridis</option><option>magma</option><option>cividis</option><option>coolwarm</option></select>
+        <button type="submit">Render heatmap</button>
+      </form>
+      <figure id="slice-preview" hidden><img id="slice-image" alt="Selected scientific data plane"><figcaption id="slice-caption"></figcaption><a id="slice-download" download>Download PNG</a></figure>
+    </section>
     <section id="operation-result" aria-live="polite" aria-atomic="true" hidden><h2 id="result-title">Result</h2><div id="result-content"></div></section>
     <section>
       <h2><span class="step">4</span> View results</h2><div id="artifacts">

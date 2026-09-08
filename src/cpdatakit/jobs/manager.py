@@ -20,6 +20,31 @@ JobFunction = Callable[[threading.Event], Any]
 logger = logging.getLogger(__name__)
 
 
+class JobCancelled(JobError):
+    """Cancellation observed at an operation checkpoint."""
+
+
+class JobContext(threading.Event):
+    """An Event compatible context with cooperative progress checkpoints."""
+
+    def __init__(self, on_progress=None):
+        super().__init__()
+        self.on_progress = on_progress
+
+    def checkpoint(self, stage: str) -> None:
+        if self.is_set():
+            raise JobCancelled("Operation cancelled before " + stage)
+        if self.on_progress is not None:
+            self.on_progress(stage)
+
+
+@dataclass(frozen=True, slots=True)
+class CommittedResult:
+    """An output has been promoted and registered; later cancellation cannot undo it."""
+
+    value: Any
+
+
 class JobFailure(JobError):
     """A failed operation with its structured result."""
 
@@ -143,7 +168,9 @@ class JobManager:
                 error=message,
             )
             return
-        if state.cancel_event.is_set():
+        if isinstance(result, CommittedResult):
+            result = result.value
+        elif state.cancel_event.is_set():
             self._update(
                 state,
                 status=JobStatus.CANCELLED,
@@ -191,7 +218,10 @@ class JobManager:
                     _basename(output_path),
                     ("queued",),
                 ),
-                threading.Event(),
+                JobContext(),
+            )
+            state.cancel_event.on_progress = lambda stage: self._update(
+                state, operation_log=(stage,)
             )
             self._jobs[job_id] = state
             state.future = self._executor.submit(self._run, state, function)

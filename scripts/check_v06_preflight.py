@@ -152,7 +152,12 @@ def check_preflight(root: Path) -> list[str]:
                 not isinstance(item, dict)
                 or not all(
                     isinstance(item.get(key), str) and item[key]
-                    for key in ("name", "distribution", "module", "lower")
+                    for key in ("name", "distribution", "module")
+                )
+                or not isinstance(item.get("lower"), dict)
+                or set(item["lower"]) != {"3.12", "3.13"}
+                or not all(
+                    isinstance(v, str) and v.startswith("==") for v in item["lower"].values()
                 )
                 for item in packages
             ):

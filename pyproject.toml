@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cpdatakit"
-version = "0.7.0"
+version = "0.8.0"
 description = "Schema-first validation, normalization, and audit tooling for scientific data"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -30,14 +30,14 @@ classifiers = [
 dependencies = [
   "numpy>=2.0,<3",
   "pandas>=2.2,<3",
-  "h5py>=3.8,<4",
+  "h5py>=3.11,<4",
   "matplotlib>=3.7",
-  "pint>=0.22",
+  "pint>=0.24.4",
   "xarray>=2026.7,<2027",
   "zarr>=3.1,<4",
   "pyarrow>=25,<26",
   "h5netcdf>=1.5,<2",
-  "netCDF4>=1.7,<2",
+  "netCDF4>=1.7.2,<2",
   "fastapi>=0.141,<1",
   "uvicorn>=0.35,<1",
   "Jinja2>=3.1,<4",
@@ -60,10 +60,10 @@ dev = [
 cpdatakit = "cpdatakit.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/17636365690/cpdatakit"
-Documentation = "https://github.com/17636365690/cpdatakit/blob/main/docs/quickstart.md"
-Issues = "https://github.com/17636365690/cpdatakit/issues"
-Changelog = "https://github.com/17636365690/cpdatakit/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/koocmitwho/cpdatakit"
+Documentation = "https://github.com/koocmitwho/cpdatakit/blob/main/docs/quickstart.md"
+Issues = "https://github.com/koocmitwho/cpdatakit/issues"
+Changelog = "https://github.com/koocmitwho/cpdatakit/blob/main/CHANGELOG.md"
 PyPI = "https://pypi.org/project/cpdatakit/"
 
 [tool.hatch.build]
@@ -94,6 +94,7 @@ include = [
   "/MAINTAINERS.md",
   "/.editorconfig",
   "/.gitignore",
+  "/.gitattributes",
   "/.pre-commit-config.yaml",
 ]
 

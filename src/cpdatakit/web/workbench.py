@@ -289,6 +289,8 @@ def install_workbench(app, templates, *, csrf_token, session_token, require_csrf
                     "sandbox; default-src 'none'; style-src 'unsafe-inline'"
                 )
                 return FileResponse(path, media_type="text/html", headers=headers)
+            if record.kind == "slice" and not download:
+                return FileResponse(path, media_type="image/png", headers=headers)
             return FileResponse(path, filename=path.name, headers=headers)
         except (CatalogError, OSError):
             return _json_error(

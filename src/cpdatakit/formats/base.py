@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Protocol, TypeAlias, runtime_checkable
 
 DataValue: TypeAlias = object
@@ -69,6 +71,7 @@ class Selection:
     fields: tuple[str, ...] = field(default_factory=tuple)
     start: int | None = None
     stop: int | None = None
+    indexers: Mapping[str, int | slice] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "fields", tuple(self.fields))
@@ -82,6 +85,22 @@ class Selection:
             raise ValueError("stop must be non-negative")
         if self.start is not None and self.stop is not None and self.start > self.stop:
             raise ValueError("start must not exceed stop")
+        for dimension, index in self.indexers.items():
+            if not isinstance(dimension, str) or not dimension:
+                raise ValueError("dimension names must be non-empty strings")
+            if isinstance(index, bool) or not isinstance(index, (int, slice)):
+                raise ValueError("dimension indexers must be integers or slices")
+            parts = (index,) if isinstance(index, int) else (index.start, index.stop, index.step)
+            if any(
+                v is not None and (isinstance(v, bool) or not isinstance(v, int) or v < 0)
+                for v in parts
+            ):
+                raise ValueError("dimension bounds must be non-negative integers")
+            if isinstance(index, slice) and (
+                index.step == 0 or (index.stop is not None and (index.start or 0) > index.stop)
+            ):
+                raise ValueError("dimension slices require ordered bounds and a positive step")
+        object.__setattr__(self, "indexers", MappingProxyType(dict(self.indexers)))
 
 
 @runtime_checkable

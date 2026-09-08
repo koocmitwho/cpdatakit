@@ -1,0 +1,2 @@
+# Preserve the exact bytes recorded by the reference manifest.
+examples/cpfe-tensile/reference/* -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

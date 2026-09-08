@@ -8,8 +8,10 @@ import numpy as np
 import pandas as pd
 
 from ..data import ScientificDataset
+from ..exceptions import DataValidationError
 from ..model import ValidationIssue, ValidationResult
 from ..schemas import ResolvedSchemaV2
+from .units import declared_unit
 
 
 def validate_scientific(value: ScientificDataset, schema: ResolvedSchemaV2) -> ValidationResult:
@@ -53,12 +55,12 @@ def validate_scientific(value: ScientificDataset, schema: ResolvedSchemaV2) -> V
                 matches = all(isinstance(x, (str, bytes)) for x in values.flat)
             if not matches:
                 issue("invalid_dtype", item.name, f"Expected {item.dtype}; found {values.dtype}.")
-            unit = array.attrs.get("unit", array.attrs.get("units"))
-            metadata_unit = value.metadata.get("units", {}).get(item.name)
-            actual_unit = unit if unit is not None else metadata_unit
-            if actual_unit != item.unit or (
-                metadata_unit is not None and metadata_unit != item.unit
-            ):
+            try:
+                actual_unit = declared_unit(array, value.metadata, item.name)
+            except DataValidationError as exc:
+                issue("unit_conflict", item.name, str(exc))
+                actual_unit = None
+            if actual_unit != item.unit:
                 issue(
                     "unit_mismatch",
                     item.name,

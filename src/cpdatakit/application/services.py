@@ -27,7 +27,7 @@ from ..formats import NetCDFWriter, ParquetWriter, ReadLimits, ZarrWriter
 from ..inspection import sanitize_error_message, sanitize_for_output
 from ..io import write_hdf5, write_hdf5_v2
 from ..model import ValidationResult
-from ..normalization import FieldMapping, load_mapping_file, normalize_dataset
+from ..normalization import FieldMapping, load_mapping_file
 from ..plotting import (
     plot_counts,
     plot_field2d,
@@ -57,11 +57,11 @@ from .data_access import (
     load_value,
     path_sha256,
     reader_for,
-    require_tabular_mapping,
     resolve_contract,
     summarize_value,
     validate_value,
 )
+from .mapping import normalize_value
 
 logger = logging.getLogger(__name__)
 
@@ -467,17 +467,12 @@ def _resolve(
 def _load_normalized(
     request: DatasetRequest | ConvertRequest | PlotRequest,
     resolved: ResolvedSchemaMapping,
+    context=None,
 ):
-    dataset = load_value(request.data)
-    require_tabular_mapping(dataset, request.mapping)
-    if resolved.mappings or request.mapping is not None:
-        dataset = normalize_dataset(
-            dataset,
-            resolved.schema,
-            list(resolved.mappings),
-            drop_unmapped=resolved.drop_unmapped,
-        )
-    return dataset
+    dataset = (
+        load_value(request.data) if context is None else load_value(request.data, context=context)
+    )
+    return normalize_value(dataset, request, resolved)
 
 
 def _read_report(path: Path) -> dict[str, Any]:
@@ -579,7 +574,7 @@ def validate_and_summarize(
     )
 
 
-def convert_and_write(request: ConvertRequest) -> ServiceResult[ConversionOutcome]:
+def convert_and_write(request: ConvertRequest, *, context=None) -> ServiceResult[ConversionOutcome]:
     """Validate and atomically write through the selected format adapter."""
 
     provenance = _provenance(
@@ -590,7 +585,9 @@ def convert_and_write(request: ConvertRequest) -> ServiceResult[ConversionOutcom
     )
     try:
         resolved = _resolve(request)
-        dataset = _load_normalized(request, resolved)
+        dataset = _load_normalized(request, resolved, context=context)
+        if context is not None:
+            context.checkpoint("validate")
         validation = validate_value(dataset, resolved.schema)
     except Exception as exc:
         return _failure("convert_and_write", exc, provenance=provenance)
@@ -610,6 +607,10 @@ def convert_and_write(request: ConvertRequest) -> ServiceResult[ConversionOutcom
         )
     try:
         if request.output_format == "hdf5" and not isinstance(dataset, ScientificDataset):
+            if request.mapping is not None:
+                dataset.metadata["mapping_sha256"] = path_sha256(request.mapping)
+            if context is not None:
+                context.checkpoint("write")
             write_hdf5(
                 dataset,
                 request.output,
@@ -621,6 +622,8 @@ def convert_and_write(request: ConvertRequest) -> ServiceResult[ConversionOutcom
                 allow_invalid=request.allow_invalid,
             )
         else:
+            if request.mapping is not None:
+                dataset.metadata["mapping_sha256"] = path_sha256(request.mapping)
             dataset.metadata["provenance"] = {
                 **dataset.metadata.get("provenance", {}),
                 **provenance,
@@ -633,6 +636,8 @@ def convert_and_write(request: ConvertRequest) -> ServiceResult[ConversionOutcom
                 "error_count": len(validation.errors),
                 "warning_count": len(validation.warnings),
             }
+            if context is not None:
+                context.checkpoint("write")
             if request.output_format == "hdf5":
                 write_hdf5_v2(dataset, request.output, resolved.schema, force=request.force)
             else:

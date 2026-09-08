@@ -1,20 +1,23 @@
 # CPDataKit
 
-CPDataKit 是一个面向科学和工程数据的 schema-first Python 验证、标准化和审计工具。项目最初
-从晶体塑性工作流开始，crystal plasticity 仍然是第一个完整支持的垂直场景。
+CPDataKit 是面向科学和工程数据的 Python 工具，通过 schema 定义字段规则，完成验证、标准化
+和审计。项目最初用于晶体塑性工作流。
 
-> **Alpha 版本：** 验证报告说明记录是否符合所选 schema。物理结果使用领域方法解释。
-> 仓库示例使用固定随机种子，公开参考数据保留在上游来源。
+v0.8.0 新增选择性读取、多维热图、schema 草案、映射预览和可复现批处理。
+使用方法见[工作流指南](docs/post-v07-workflows.md)，另附
+[读取基准](docs/selective-reading.md)和[KupferDigital/FE 集成案例](examples/cpfe-tensile/README.md)。
+
+> **Alpha 版本：** 验证报告说明记录是否符合所选 schema，物理结果需要结合领域方法解释。
+> 合成示例使用固定随机种子，原始公开数据保留在上游来源。KupferDigital 集成随附按
+> CC-BY-4.0 署名的处理后数据。
 
 ## 什么时候用
 
-数据交接时，字段名和单位很容易分叉。例如热循环导出器使用摄氏度而下游需要开尔文；晶体
-塑性导出器给出 `eps` 和 `sigma_pa`，分析脚本却需要 `strain` 和 `stress`。CPDataKit 把这些
-约定写进 schema 和 mapping 文件，并把验证结果保存到输出 HDF5。
+热循环导出器使用摄氏度，下游脚本需要开尔文。晶体塑性导出器给出 `eps` 和 `sigma_pa`，
+分析脚本需要 `strain` 和 `stress`。把这些约定写进 schema 和 mapping 文件，CPDataKit
+就能在分析或交接文件前完成转换，并把验证结果保存到输出 HDF5，方便以后追查字段改名的原因。
 
-它可以放在分析脚本前或文件交接环节，也适合记录字段改名的原因。CPDataKit 把数据契约、
-来源、验证和单位转换集中在数据边界，并提供 CPDataKit HDF5、选定 DAMASK DADF5 数据和
-Surfalex 公开参考流程的文档化路径。
+仓库提供 CPDataKit HDF5、选定 DAMASK DADF5 数据和 Surfalex 公开参考流程的读取器与示例。
 
 内置 `curve`、`point` 和 `field2d` 是来自 CP 垂直场景的兼容 profile。外部 JSON schema 可使用
 其他非空 profile 名称。CPDataKit 读取 UTF-8 CSV、JSON records 和自有 HDF5，并提供 schema
@@ -32,10 +35,10 @@ v0.6 还提供 `ScientificDataset`、CPDataKit HDF5 2.0、NetCDF、Zarr 3 和仅
 v0.7 工作台支持多维数据上传、自定义 schema、验证、转换和报告。
 使用方法见 [v0.7 工作台指南](docs/v0.7-workbench.md)。
 
-当前 `v0.7.0` 已发布到 PyPI，使用以下命令安装：
+从 PyPI 安装 v0.8.0：
 
 ```powershell
-python -m pip install cpdatakit
+python -m pip install "cpdatakit==0.8.0"
 ```
 
 v0.6.0 要求 Python 3.12 或更高版本，因为 xarray 和 Zarr 已经高于 v0.5 的依赖下限。
@@ -44,10 +47,10 @@ Python 3.10 和 3.11 用户继续使用已发布的 v0.5.x 兼容线。
 如果需要固定 GitHub Release wheel，可使用：
 
 ```powershell
-python -m pip install "https://github.com/17636365690/cpdatakit/releases/download/v0.7.0/cpdatakit-0.7.0-py3-none-any.whl"
+python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download/v0.8.0/cpdatakit-0.8.0-py3-none-any.whl"
 ```
 
-然后按照[五分钟快速教程](https://github.com/17636365690/cpdatakit/blob/main/docs/quickstart.md)
+然后按照[五分钟快速教程](https://github.com/koocmitwho/cpdatakit/blob/main/docs/quickstart.md)
 验证、统计、转换并绘制固定种子生成的示例。
 
 ## 仓库里的工作流
@@ -70,13 +73,13 @@ python -m pip install "https://github.com/17636365690/cpdatakit/releases/downloa
 ## 项目与集成链接
 
 - [PyPI 软件包](https://pypi.org/project/cpdatakit/)
-- [v0.7.0 GitHub Release](https://github.com/17636365690/cpdatakit/releases/tag/v0.7.0)
-- [v0.5.0 GitHub Release](https://github.com/17636365690/cpdatakit/releases/tag/v0.5.0)
-- [五分钟快速教程](https://github.com/17636365690/cpdatakit/blob/main/docs/quickstart.md)
-- [Schema authoring 与 mapping 指南](https://github.com/17636365690/cpdatakit/blob/main/docs/schema-authoring.md)
-- [示例目录](https://github.com/17636365690/cpdatakit/tree/main/examples)
-- [公共参考案例 #1：Surfalex HF](https://github.com/17636365690/cpdatakit/tree/main/examples/public-datasets/surfalex-aa6016a)
-- [路线图与 Issue](https://github.com/17636365690/cpdatakit/issues)
+- [v0.8.0 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.8.0)
+- [v0.5.0 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.5.0)
+- [五分钟快速教程](https://github.com/koocmitwho/cpdatakit/blob/main/docs/quickstart.md)
+- [Schema authoring 与 mapping 指南](https://github.com/koocmitwho/cpdatakit/blob/main/docs/schema-authoring.md)
+- [示例目录](https://github.com/koocmitwho/cpdatakit/tree/main/examples)
+- [公共参考案例 #1：Surfalex HF](https://github.com/koocmitwho/cpdatakit/tree/main/examples/public-datasets/surfalex-aa6016a)
+- [路线图与 Issue](https://github.com/koocmitwho/cpdatakit/issues)
 如果需要新的数据契约或输入格式，请在 Issue 中附一个小型合成样例和字段规则，后续改动就有
 具体的测试对象。
 
@@ -108,7 +111,7 @@ cpdatakit plot thermal-cycle.h5 --schema examples/thermal-cycle/schema/thermal-c
 cpdatakit convert raw.csv --schema curve --mapping mapping.json --output curve.h5
 ```
 
-详见[schema authoring 与 mapping 指南](https://github.com/17636365690/cpdatakit/blob/main/docs/schema-authoring.md)。
+详见[schema authoring 与 mapping 指南](https://github.com/koocmitwho/cpdatakit/blob/main/docs/schema-authoring.md)。
 
 比较两个 schema 契约：
 
@@ -177,11 +180,13 @@ window = load_hdf5("curve.h5", fields=["step", "stress"], start=10, stop=20)
 
 ## 文档、范围与贡献
 
-详细格式见[数据格式文档](https://github.com/17636365690/cpdatakit/blob/main/docs/data-format.md)，
+详细格式见[数据格式文档](https://github.com/koocmitwho/cpdatakit/blob/main/docs/data-format.md)，
 架构、适配器、维护和路线图见仓库 `docs/`。
 仓库提供一个文档化的 DAMASK DADF5 只读选择适配器，适配器贡献按格式证据、许可、可复现
 夹具和科学约定清单审核。贡献前请阅读
-[CONTRIBUTING.md](https://github.com/17636365690/cpdatakit/blob/main/CONTRIBUTING.md)。项目采用
+[CONTRIBUTING.md](https://github.com/koocmitwho/cpdatakit/blob/main/CONTRIBUTING.md)。项目采用
 Apache-2.0，依赖许可核查见
-[NOTICE](https://github.com/17636365690/cpdatakit/blob/main/NOTICE)，引用信息见
-[CITATION.cff](https://github.com/17636365690/cpdatakit/blob/main/CITATION.cff)。
+[NOTICE](https://github.com/koocmitwho/cpdatakit/blob/main/NOTICE)，引用信息见
+[CITATION.cff](https://github.com/koocmitwho/cpdatakit/blob/main/CITATION.cff)。
+
+[v0.8.0 候选说明](docs/v0.8-release-candidate.md)包含安装方法、验证矩阵和发布步骤。

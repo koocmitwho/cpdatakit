@@ -3,6 +3,9 @@
 This run uses deterministic synthetic data. It validates a declared crystal-plasticity curve,
 writes an HDF5 file with provenance, and renders a stress-strain plot.
 
+For the v0.8 workflows, see [multidimensional viewing, schema drafting and
+batch conversion](post-v07-workflows.md). The current release walkthrough below remains valid.
+
 ## 1. Install the current release
 
 Start in a virtual environment:
@@ -26,13 +29,13 @@ source .venv/bin/activate
 Install the current release from PyPI:
 
 ```bash
-python -m pip install cpdatakit
+python -m pip install "cpdatakit==0.8.0"
 ```
 
-For a pinned GitHub v0.7.0 release wheel, use:
+For a pinned GitHub v0.8.0 release wheel, use:
 
 ```bash
-python -m pip install "https://github.com/17636365690/cpdatakit/releases/download/v0.7.0/cpdatakit-0.7.0-py3-none-any.whl"
+python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download/v0.8.0/cpdatakit-0.8.0-py3-none-any.whl"
 ```
 
 ## 2. Generate a reproducible example

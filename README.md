@@ -1,32 +1,34 @@
 # CPDataKit
 
+[![CI](https://github.com/koocmitwho/cpdatakit/actions/workflows/ci.yml/badge.svg)](https://github.com/koocmitwho/cpdatakit/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/koocmitwho/cpdatakit)](https://github.com/koocmitwho/cpdatakit/releases/latest)
+[![PyPI](https://img.shields.io/pypi/v/cpdatakit)](https://pypi.org/project/cpdatakit/)
+[![License](https://img.shields.io/github/license/koocmitwho/cpdatakit)](https://github.com/koocmitwho/cpdatakit/blob/main/LICENSE)
+
+CPDataKit is a schema-first Python toolkit for validating, normalizing, and auditing scientific and
+engineering data. It began with crystal-plasticity workflows.
+
 The v0.7 workbench supports multidimensional uploads, custom schemas, validation, conversion
 and reports. Follow the [workbench guide](docs/v0.7-workbench.md) to get started.
 
-[![CI](https://github.com/17636365690/cpdatakit/actions/workflows/ci.yml/badge.svg)](https://github.com/17636365690/cpdatakit/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/17636365690/cpdatakit)](https://github.com/17636365690/cpdatakit/releases/latest)
-[![PyPI](https://img.shields.io/pypi/v/cpdatakit)](https://pypi.org/project/cpdatakit/)
-[![License](https://img.shields.io/github/license/17636365690/cpdatakit)](https://github.com/17636365690/cpdatakit/blob/main/LICENSE)
+v0.8.0 adds selective reads, multidimensional heatmaps, editable
+schema drafts, mapping previews and reproducible batches. See
+[the workflow guide](docs/post-v07-workflows.md), [read benchmarks](docs/selective-reading.md),
+and the [KupferDigital/FE integration case](examples/cpfe-tensile/README.md).
 
-CPDataKit is a schema-first Python toolkit for validating, normalizing, and auditing scientific and
-engineering data. The project started from crystal-plasticity workflows, which remain its first
-fully supported vertical.
-
-> **Alpha software:** A passing validation report confirms that the records match the selected
-> schema. Use domain methods to interpret physical results. The bundled data use a fixed seed, and
-> public reference data remain at their upstream source.
+> **Alpha software:** Validation checks records against the selected schema, while physical results
+> need interpretation using domain methods. The KupferDigital integration includes processed data
+> with CC-BY-4.0 attribution.
 
 ## When it helps
 
-A hand-off can be as small as a column name. One exporter stores temperature in degrees Celsius,
-another expects kelvin. A crystal-plasticity exporter writes `sigma_pa`, while an analysis expects
-`stress` in MPa. CPDataKit puts those choices in a schema and an explicit mapping file, then keeps
-the validation result with the converted data.
+One exporter stores temperature in degrees Celsius while the next script expects kelvin, and a
+crystal-plasticity exporter writes `sigma_pa` where an analysis expects `stress` in MPa.
+Put those conventions in a schema and mapping file, then use CPDataKit to convert the data and
+keep the validation result for later analysis or file exchanges.
 
-Use it before an analysis script, when exchanging files with a colleague, or when you need to
-explain later why a column was renamed. The package stays at the data boundary and keeps data
-contracts, provenance, validation, and conversions explicit. Its documented readers and examples
-cover CPDataKit HDF5, selected DAMASK DADF5 data, and the Surfalex reference workflow.
+Documented readers and examples cover CPDataKit HDF5, selected DAMASK DADF5 data, and the
+Surfalex reference workflow.
 
 ## Supported contracts and formats
 
@@ -39,7 +41,7 @@ crystal-plasticity vertical:
 
 External JSON schemas may use other non-empty profile names while keeping the same explicit field,
 dtype, unit, shape, and convention rules. See the complete non-CP
-[`thermal-cycle` example](https://github.com/17636365690/cpdatakit/tree/main/examples/thermal-cycle).
+[`thermal-cycle` example](https://github.com/koocmitwho/cpdatakit/tree/main/examples/thermal-cycle).
 
 Inputs are UTF-8 CSV, JSON arrays of records, and CPDataKit HDF5 (`.h5`/`.hdf5`). CSV and JSON
 take units and semantics from the selected schema. HDF5 stores the units, mapping, validation
@@ -55,30 +57,30 @@ Schemas declare standard names, aliases, requiredness, dtype, per-record shape, 
 missing-value policy, index constraints, ranges, and scientific conventions. Custom fields
 must be declared or use `user_`. Stress/strain measures, tensor order, orientation representation,
 units, and identifier semantics come from the explicit schema or mapping. See
-[the data format](https://github.com/17636365690/cpdatakit/blob/main/docs/data-format.md).
+[the data format](https://github.com/koocmitwho/cpdatakit/blob/main/docs/data-format.md).
 
 ## Install
 
 Install the current release from PyPI:
 
 ```bash
-python -m pip install cpdatakit
+python -m pip install "cpdatakit==0.8.0"
 ```
 
-For a pinned GitHub v0.7.0 release wheel, use:
+For a pinned GitHub v0.8.0 release wheel, use:
 
 ```bash
-python -m pip install "https://github.com/17636365690/cpdatakit/releases/download/v0.7.0/cpdatakit-0.7.0-py3-none-any.whl"
+python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download/v0.8.0/cpdatakit-0.8.0-py3-none-any.whl"
 ```
 
 Then follow the
-[five-minute quickstart](https://github.com/17636365690/cpdatakit/blob/main/docs/quickstart.md)
+[five-minute quickstart](https://github.com/koocmitwho/cpdatakit/blob/main/docs/quickstart.md)
 to validate, summarize, convert, and plot a deterministic example.
 
 Installing from the source checkout is intended for contributors:
 
 ```bash
-git clone https://github.com/17636365690/cpdatakit.git
+git clone https://github.com/koocmitwho/cpdatakit.git
 cd cpdatakit
 python -m venv .venv
 ```
@@ -128,13 +130,13 @@ The examples and tests cover these paths:
 ## Useful links
 
 - [PyPI package](https://pypi.org/project/cpdatakit/)
-- [v0.7.0 GitHub Release](https://github.com/17636365690/cpdatakit/releases/tag/v0.7.0)
-- [v0.5.0 GitHub Release](https://github.com/17636365690/cpdatakit/releases/tag/v0.5.0)
-- [Quickstart](https://github.com/17636365690/cpdatakit/blob/main/docs/quickstart.md)
-- [Schema authoring and mapping guide](https://github.com/17636365690/cpdatakit/blob/main/docs/schema-authoring.md)
-- [Examples](https://github.com/17636365690/cpdatakit/tree/main/examples)
-- [Public Reference Case #1: Surfalex HF](https://github.com/17636365690/cpdatakit/tree/main/examples/public-datasets/surfalex-aa6016a)
-- [Roadmap and Issue tracker](https://github.com/17636365690/cpdatakit/issues)
+- [v0.8.0 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.8.0)
+- [v0.5.0 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.5.0)
+- [Quickstart](https://github.com/koocmitwho/cpdatakit/blob/main/docs/quickstart.md)
+- [Schema authoring and mapping guide](https://github.com/koocmitwho/cpdatakit/blob/main/docs/schema-authoring.md)
+- [Examples](https://github.com/koocmitwho/cpdatakit/tree/main/examples)
+- [Public Reference Case #1: Surfalex HF](https://github.com/koocmitwho/cpdatakit/tree/main/examples/public-datasets/surfalex-aa6016a)
+- [Roadmap and Issue tracker](https://github.com/koocmitwho/cpdatakit/issues)
 
 ## Command line
 
@@ -170,7 +172,7 @@ For an exporter with different names or units, provide an explicit mapping file:
 cpdatakit convert raw.csv --schema curve --mapping mapping.json --output curve.h5
 ```
 
-See the [schema authoring and mapping guide](https://github.com/17636365690/cpdatakit/blob/main/docs/schema-authoring.md)
+See the [schema authoring and mapping guide](https://github.com/koocmitwho/cpdatakit/blob/main/docs/schema-authoring.md)
 for the JSON format and explicit-convention rules.
 
 Compare two schema contracts:
@@ -286,10 +288,10 @@ python -m build
 ```
 
 Architecture, extension boundaries, and maintainer checks are in the
-[architecture documentation](https://github.com/17636365690/cpdatakit/blob/main/docs/architecture.md).
+[architecture documentation](https://github.com/koocmitwho/cpdatakit/blob/main/docs/architecture.md).
 Contributions follow
-[CONTRIBUTING.md](https://github.com/17636365690/cpdatakit/blob/main/CONTRIBUTING.md) and the
-[Code of Conduct](https://github.com/17636365690/cpdatakit/blob/main/CODE_OF_CONDUCT.md).
+[CONTRIBUTING.md](https://github.com/koocmitwho/cpdatakit/blob/main/CONTRIBUTING.md) and the
+[Code of Conduct](https://github.com/koocmitwho/cpdatakit/blob/main/CODE_OF_CONDUCT.md).
 
 When you need a new data contract or input format, open an issue with a small synthetic sample and
 the field rules it should follow. That gives the next change something concrete to test.
@@ -301,14 +303,17 @@ schema/HDF5 2.0 contracts, open-format adapters, and a local SQLite/job boundary
 v0.5 tabular, schema 1.0, HDF5 1.0, and CLI contracts. Native HDF5 inspection uses bounded reads.
 The bundled DAMASK DADF5 reader covers a documented read-only selection. New adapters use the
 documented format evidence, license review, and reproducible-fixture process. See the
-[roadmap](https://github.com/17636365690/cpdatakit/blob/main/docs/roadmap.md) for the next three
+[roadmap](https://github.com/koocmitwho/cpdatakit/blob/main/docs/roadmap.md) for the next three
 versions.
 
 ## Citation and license
 
-Use [CITATION.cff](https://github.com/17636365690/cpdatakit/blob/main/CITATION.cff) to cite the
+Use [CITATION.cff](https://github.com/koocmitwho/cpdatakit/blob/main/CITATION.cff) to cite the
 software. CPDataKit is licensed under Apache-2.0. See
-[LICENSE](https://github.com/17636365690/cpdatakit/blob/main/LICENSE). Direct runtime dependency
+[LICENSE](https://github.com/koocmitwho/cpdatakit/blob/main/LICENSE). Direct runtime dependency
 licenses and review notes are in
-[NOTICE](https://github.com/17636365690/cpdatakit/blob/main/NOTICE). Bundled examples use fixed-seed
+[NOTICE](https://github.com/koocmitwho/cpdatakit/blob/main/NOTICE). Bundled examples use fixed-seed
 synthetic data, and public reference files remain available from their upstream records.
+
+For candidate wheel installation, verification and release steps, see the
+[candidate guide](docs/v0.8-release-candidate.md).

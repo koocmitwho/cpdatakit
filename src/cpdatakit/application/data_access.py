@@ -12,7 +12,7 @@ import h5py
 
 from ..data import ScientificDataset
 from ..exceptions import DataReadError, DataValidationError, SchemaError
-from ..formats import NetCDFReader, ParquetReader, ReadLimits, ZarrReader
+from ..formats import NetCDFReader, ParquetReader, ReadLimits, Selection, ZarrReader
 from ..inspection import inspect_dataset
 from ..io import load_dataset, load_hdf5_v2
 from ..model import Dataset
@@ -97,12 +97,18 @@ def is_hdf5_v2(path: Path) -> bool:
         raise DataReadError(f"Cannot read HDF5 input: {path}") from exc
 
 
-def load_value(path: Path) -> Dataset | ScientificDataset:
+def load_value(
+    path: Path, *, selection: Selection | None = None, context=None
+) -> Dataset | ScientificDataset:
+    if context is not None:
+        context.checkpoint("load")
     reader = reader_for(path)
     if reader is not None:
-        return reader.load(path)
+        return reader.load(path, selection=selection, context=context)
     if is_hdf5_v2(path):
-        return load_hdf5_v2(path)
+        return load_hdf5_v2(path, selection=selection)
+    if selection is not None:
+        raise DataReadError("Selective application reads require NetCDF, Zarr, Parquet or HDF5 2.0")
     return load_dataset(path)
 
 
@@ -147,7 +153,7 @@ def inspect_input(path: Path, schema: SchemaInput | None, limits: ReadLimits) ->
             if "exceeds the configured" in str(exc):
                 raise ReadLimitError(str(exc)) from exc
             raise
-        fields = info.get("fields", info.get("variables", []))
+        fields = info.get("field_details", info.get("fields", info.get("variables", [])))
         fields = [
             {"name": name, **(fields[name] if isinstance(fields, dict) else {})} for name in fields
         ]
@@ -167,6 +173,8 @@ def inspect_input(path: Path, schema: SchemaInput | None, limits: ReadLimits) ->
                         "shape": list(array.shape),
                         "dtype": str(array.dtype),
                         "unit": array.attrs.get("unit", ""),
+                        "role": array.attrs.get("role"),
+                        "kind": "coordinate" if group == "coordinates" else "variable",
                     }
                     for group in ("coordinates", "variables")
                     for name, array in handle[group].items()

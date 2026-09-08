@@ -11,4 +11,5 @@ The v2 image changes three labels:
 - `Works with any crystal plasticity solver` to `Works with explicit tabular inputs`.
 
 The HDF5 label is `Auditable`, and the bottom banner reads `SCHEMA-VALIDATED · TRACEABLE ·
-WELL-DOCUMENTED MATERIALS DATA`. The original image remains in the directory for comparison.
+WELL-DOCUMENTED MATERIALS DATA`. The original PNG remains in the Git repository for comparison. The source distribution includes
+the current JPG.

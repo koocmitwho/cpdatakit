@@ -110,3 +110,62 @@ def test_queued_cancellation_notifies_callbacks_with_terminal_state() -> None:
     finally:
         gate.set()
         manager.shutdown()
+
+
+def test_completed_output_is_not_erased_by_late_cancellation(tmp_path):
+    import cpdatakit.jobs.manager as module
+
+    assert hasattr(module, "CommittedResult"), "jobs need an explicit output completion boundary"
+    manager = JobManager(max_workers=1)
+    written = threading.Event()
+    finish = threading.Event()
+    output = tmp_path / "result.txt"
+    try:
+
+        def work(cancel):
+            output.write_text("complete", encoding="utf-8")
+            written.set()
+            assert finish.wait(5)
+            return module.CommittedResult({"artifact": output.name})
+
+        handle = manager.submit("write", work)
+        assert written.wait(5)
+        assert manager.cancel(handle.id)
+        finish.set()
+        result = manager.wait(handle.id, timeout=5)
+        assert result.status == JobStatus.SUCCEEDED
+        assert result.result == {"artifact": "result.txt"}
+        assert output.read_text() == "complete"
+    finally:
+        finish.set()
+        manager.shutdown()
+
+
+def test_context_cancellation_stops_at_checkpoint_and_reports_progress():
+    manager = JobManager(max_workers=1)
+    reached = threading.Event()
+    finish = threading.Event()
+    effects = []
+    try:
+
+        def work(cancel):
+            assert hasattr(cancel, "checkpoint"), "job context must expose progress checkpoints"
+            cancel.checkpoint("read 1/3")
+            reached.set()
+            assert finish.wait(5)
+            cancel.checkpoint("read 2/3")
+            effects.append("written")
+
+        handle = manager.submit("chunks", work)
+        # Surface a failed worker immediately instead of waiting on a missing checkpoint.
+        if not reached.wait(1):
+            assert manager.wait(handle.id, timeout=5).error is None
+        assert "read 1/3" in manager.get(handle.id).operation_log
+        manager.cancel(handle.id)
+        finish.set()
+        result = manager.wait(handle.id, timeout=5)
+        assert result.status == JobStatus.CANCELLED
+        assert effects == []
+    finally:
+        finish.set()
+        manager.shutdown()

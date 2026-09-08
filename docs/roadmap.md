@@ -27,7 +27,29 @@
   reports, job status and result downloads. Scientific arrays use schema 2.0 validation and
   HDF5 2.0 output, while tabular workflows retain their v0.5 contracts.
 
-Future work includes migration manifests, additional adapters, schema-driven plots and mesh
-topology. Solver execution and physical inference need their own data and validation workflows.
+## v0.8.0 (released 2026-09-08)
 
-Further DADF5 and ODB coverage follows the documented evidence and license review process.
+v0.8.0 adds selective reads, multidimensional heatmaps and batch conversion,
+along with schema drafts and mapping previews that help users check fields before conversion.
+Jobs expose checkpoints for progress and cancellation.
+The KupferDigital/FE example keeps source hashes and case splits from existing experiment-derived
+and training data in the 0–0.8% strain window.
+
+See [usage](post-v07-workflows.md), [dependency combinations](v0.8-dependencies.md) and
+[candidate verification](verification/2026-09-08-v080-p0.md) for usage and release status.
+
+## Follow-up milestones
+
+- **Mesh topology:** use a licensed mesh and matching scalar or tensor field to define node/element
+  IDs, connectivity, element types, coordinate frame, units and field association (node, cell or
+  integration point). Round trips preserve IDs and connectivity. Tests catch dangling references.
+  Establish the example's field-to-mesh association before choosing interpolation or projection rules.
+- **Schema migration:** use paired schema versions and a real dataset with an agreed transformation,
+  then record each rename, unit conversion, reshape, dropped field and loss policy in a migration
+  manifest. Include source/target schema hashes and a dry-run report. Tests cover forward conversion
+  and recovery after a failed step, and check that source bytes are preserved.
+  Schema diff compares contracts.
+- **Additional adapters:** document the format and version range, provide licensed fixtures,
+  and specify selection behavior, units and scientific conventions. DADF5 and ODB extensions use
+  the same acceptance process. Solver execution and physical inference remain separate workflows
+  with their own data and validation.

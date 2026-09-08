@@ -56,7 +56,12 @@ class ParquetReader:
             raise DataReadError("Parquet input exceeds the configured byte limit")
         parquet = importlib.import_module("pyarrow.parquet")
         try:
-            metadata = parquet.ParquetFile(input_path).metadata
+            with parquet.ParquetFile(input_path) as file:
+                metadata = file.metadata
+                schema = file.schema_arrow
+            units = decode_metadata((schema.metadata or {}).get(METADATA_KEY.encode())).get(
+                "units", {}
+            )
             rows = int(metadata.num_rows)
             if rows > limits.max_records:
                 raise DataReadError("Parquet input exceeds the configured record limit")
@@ -66,31 +71,78 @@ class ParquetReader:
                 "fields": [
                     metadata.schema.column(index).name for index in range(metadata.num_columns)
                 ],
+                "field_details": {
+                    field.name: {
+                        "dtype": str(field.type),
+                        "shape": [rows],
+                        "record_shape": [],
+                        "unit": units.get(field.name),
+                    }
+                    for field in schema
+                },
             }
         except DataReadError:
             raise
         except (OSError, ValueError, TypeError) as exc:
             raise DataReadError(f"Cannot inspect Parquet input {input_path}: {exc}") from exc
 
-    def load(self, path: Path, *, selection: Selection | None = None) -> Dataset:
+    def load(self, path: Path, *, selection: Selection | None = None, context=None) -> Dataset:
         input_path = Path(path)
         _check_path(input_path)
-        _pyarrow()
+        arrow = _pyarrow()
         try:
+            if selection and selection.indexers:
+                raise DataReadError("Parquet selections use record bounds, not named dimensions")
             fields = list(selection.fields) if selection and selection.fields else None
             parquet = importlib.import_module("pyarrow.parquet")
-            table = parquet.read_table(input_path, columns=fields, use_pandas_metadata=True)
+            with parquet.ParquetFile(input_path) as file:
+                if fields and (unknown := set(fields) - set(file.schema_arrow.names)):
+                    raise DataReadError(f"Unknown Parquet selection fields: {sorted(unknown)}")
+                bounded = selection and (selection.start is not None or selection.stop is not None)
+                if not bounded and context is None:
+                    table = file.read(columns=fields, use_pandas_metadata=True)
+                else:
+                    count = file.metadata.num_rows
+                    start = selection.start if selection and selection.start is not None else 0
+                    stop = selection.stop if selection and selection.stop is not None else count
+                    if stop > count:
+                        raise DataReadError(
+                            f"Parquet selection bounds must fit record_count={count}"
+                        )
+                    # A zero-row read supplies the projected schema, including legacy indexes.
+                    schema = file.read_row_groups(
+                        [], columns=fields, use_pandas_metadata=True
+                    ).schema
+                    batches = []
+                    offset = 0
+                    for group in range(file.num_row_groups):
+                        end = offset + file.metadata.row_group(group).num_rows
+                        if offset >= stop:
+                            break
+                        if end > start and start < stop:
+                            position = offset
+                            for batch in file.iter_batches(
+                                batch_size=65536,
+                                row_groups=[group],
+                                columns=fields,
+                                use_pandas_metadata=True,
+                            ):
+                                if context is not None:
+                                    context.checkpoint(f"read rows {position}/{count}")
+                                lower = max(0, start - position)
+                                upper = min(batch.num_rows, stop - position)
+                                if lower < upper:
+                                    batches.append(batch.slice(lower, upper - lower))
+                                position += batch.num_rows
+                                if position >= stop:
+                                    break
+                        offset = end
+                    table = arrow.Table.from_batches(batches, schema=schema)
             metadata = decode_metadata((table.schema.metadata or {}).get(METADATA_KEY.encode()))
             metadata.setdefault("format", "Parquet")
             frame = table.to_pandas()
-            if selection and (selection.start is not None or selection.stop is not None):
-                start = selection.start if selection.start is not None else 0
-                stop = selection.stop if selection.stop is not None else len(frame)
-                if stop > len(frame):
-                    raise DataReadError(
-                        f"Parquet selection bounds must fit record_count={len(frame)}"
-                    )
-                frame = frame.iloc[start:stop].reset_index(drop=True)
+            if bounded:
+                frame = frame.reset_index(drop=True)
             return Dataset(frame, metadata, input_path)
         except DataReadError:
             raise
