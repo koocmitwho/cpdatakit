@@ -113,6 +113,12 @@ def verify_probe(payload: dict[str, Any], *, candidates: Path = _CANDIDATES) -> 
         raise ValueError("Dependency probe is incomplete")
 
 
+def verify_environment_module(module: str | Path, environment: Path) -> None:
+    """Resolve filesystem aliases before checking the installed module boundary."""
+    if not Path(module).resolve().is_relative_to(environment.resolve()):
+        raise ValueError(f"Tests would import outside installed environment: {module}")
+
+
 def extract_source(archive: Path, destination: Path) -> Path:
     """Use the sdist snapshot for tests, metadata and examples."""
     with tarfile.open(archive) as handle:
@@ -292,8 +298,7 @@ def run_matrix_cell(
             module = subprocess.check_output(
                 [str(executable), "-c", "import cpdatakit; print(cpdatakit.__file__)"], text=True
             ).strip()
-            if not Path(module).is_relative_to(environment):
-                raise ValueError(f"Tests would import outside installed environment: {module}")
+            verify_environment_module(module, environment)
             payload["installed_module"] = module
             run(
                 "tests",

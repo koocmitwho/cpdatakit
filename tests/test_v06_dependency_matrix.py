@@ -157,3 +157,42 @@ def test_probe_completeness_uses_frozen_candidate_list(tmp_path):
         },
     }
     _load_matrix_module().verify_probe(payload, candidates=candidates)
+
+
+def test_installed_module_accepts_normalized_environment_path(tmp_path):
+    environment = tmp_path / "venv"
+    module = environment / "lib/cpdatakit/__init__.py"
+    module.parent.mkdir(parents=True)
+    module.write_text("")
+    (tmp_path / "alias-parent").mkdir()
+    alias = tmp_path / "alias-parent/../venv"
+    _load_matrix_module().verify_environment_module(module, alias)
+
+
+def test_installed_module_rejects_source_outside_environment(tmp_path):
+    environment = tmp_path / "venv"
+    environment.mkdir()
+    source = tmp_path / "source.py"
+    source.write_text("")
+    with pytest.raises(ValueError, match="outside installed environment"):
+        _load_matrix_module().verify_environment_module(source, environment)
+
+
+def test_installed_module_accepts_symlink_alias(tmp_path):
+    environment = tmp_path / "venv"
+    module = environment / "lib/cpdatakit/__init__.py"
+    module.parent.mkdir(parents=True)
+    module.write_text("")
+    alias = tmp_path / "alias"
+    import os
+    import subprocess
+
+    if os.name == "nt":
+        subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(alias), str(environment)],
+            check=True,
+            capture_output=True,
+        )
+    else:
+        alias.symlink_to(environment, target_is_directory=True)
+    _load_matrix_module().verify_environment_module(module, alias)
