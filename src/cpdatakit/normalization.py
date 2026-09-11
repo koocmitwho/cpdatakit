@@ -173,6 +173,23 @@ def normalize_dataset(
         if bool(item.input_unit) != bool(item.output_unit):
             raise NormalizationError("Both input_unit and output_unit are required for conversion")
         if item.input_unit and item.output_unit:
+            if item.source in units:
+                try:
+                    reference = (
+                        _UREG.Quantity(np.array([0.0, 1.0]), units[item.source])
+                        .to(item.input_unit)
+                        .magnitude
+                    )
+                    agrees = np.allclose(reference, [0.0, 1.0], rtol=1e-12, atol=0.0)
+                except (DimensionalityError, UndefinedUnitError, TypeError, ValueError) as exc:
+                    raise NormalizationError(
+                        f"Invalid source unit declaration for {item.source!r}"
+                    ) from exc
+                if not agrees:
+                    raise NormalizationError(
+                        f"Input unit declaration conflicts for {item.source!r}: "
+                        f"stored {units[item.source]!r}, mapping {item.input_unit!r}"
+                    )
             spec = contract.field_map()[item.target]
             series = _convert_series_units(
                 series,

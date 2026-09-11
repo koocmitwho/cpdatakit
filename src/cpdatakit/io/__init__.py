@@ -451,9 +451,16 @@ def load_hdf5_v2(path: str | Path, *, selection: Any | None = None):
     return _load_hdf5_v2(path, selection=selection)
 
 
-def write_hdf5_v2(value: Any, output: str | Path, schema: Any, *, force: bool = False) -> Path:
+def write_hdf5_v2(
+    value: Any,
+    output: str | Path,
+    schema: Any,
+    *,
+    force: bool = False,
+    allow_invalid: bool = False,
+) -> Path:
     """Lazily write an HDF5 2.0 ScientificDataset."""
 
     from .hdf5_v2 import write_hdf5_v2 as _write_hdf5_v2
 
-    return _write_hdf5_v2(value, output, schema, force=force)
+    return _write_hdf5_v2(value, output, schema, force=force, allow_invalid=allow_invalid)

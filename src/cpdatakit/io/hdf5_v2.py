@@ -15,6 +15,7 @@ import numpy as np
 import xarray as xr
 
 from ..data import ScientificDataset
+from ..data.validation import validate_scientific
 from ..exceptions import DataReadError, DataValidationError, OutputExistsError
 from ..formats import Selection
 from ..formats._selection import dimension_slices
@@ -161,6 +162,8 @@ def _write_array_dataset(
     role: str | None = None,
     chunks: tuple[int, ...] | None = None,
 ) -> None:
+    if unit is not None and not isinstance(unit, str):
+        raise DataValidationError(f"HDF5 2.0 field {name!r} unit must be text or null")
     data = _hdf5_values(variable.values, name)
     dataset = group.create_dataset(name, data=data, chunks=chunks)
     dataset.attrs["dims_json"] = json.dumps(list(dimensions), separators=(",", ":"))
@@ -180,8 +183,9 @@ def write_hdf5_v2(
     schema: SchemaInputV2,
     *,
     force: bool = False,
+    allow_invalid: bool = False,
 ) -> Path:
-    """Write an explicit ScientificDataset using the HDF5 2.0 layout."""
+    """Validate and write HDF5 2.0, recording fresh results even for allowed invalid data."""
 
     if not isinstance(value, ScientificDataset):
         raise TypeError("write_hdf5_v2 expects a ScientificDataset")
@@ -190,7 +194,6 @@ def write_hdf5_v2(
     target = Path(output)
     if target.exists() and not force:
         raise OutputExistsError(f"Output already exists: {target}; pass force=True to replace it")
-    target.parent.mkdir(parents=True, exist_ok=True)
     metadata = dict(value.metadata)
     units = metadata.get("units", {})
     if not isinstance(units, dict):
@@ -198,12 +201,24 @@ def write_hdf5_v2(
     provenance = metadata.get("provenance", {})
     if not isinstance(provenance, dict):
         raise DataValidationError("HDF5 2.0 provenance metadata must be an object")
-    validation_summary = metadata.get(
-        "validation_summary", {"valid": True, "error_count": 0, "warning_count": 0}
-    )
-    if not isinstance(validation_summary, dict):
+    if not isinstance(metadata.get("validation_summary", {}), dict):
         raise DataValidationError("HDF5 2.0 validation summary metadata must be an object")
+    validation = validate_scientific(value, resolved_schema)
+    if not validation.valid and not allow_invalid:
+        codes = ", ".join(sorted({issue.code for issue in validation.errors}))
+        raise DataValidationError(f"HDF5 2.0 validation failed: {codes}")
+    validation_summary = {
+        "valid": validation.valid,
+        "error_count": len(validation.errors),
+        "warning_count": len(validation.warnings),
+    }
+    metadata["validation_summary"] = validation_summary
     schema_snapshot = _schema_snapshot(resolved_schema)
+    global_attributes = dict(value.data.attrs)
+    attributes_json = _json_text(global_attributes, "global attributes")
+    if json.loads(attributes_json) != global_attributes:
+        raise DataValidationError("HDF5 2.0 global attributes must round-trip as JSON")
+    target.parent.mkdir(parents=True, exist_ok=True)
     temp_path: Path | None = None
     try:
         descriptor, temporary_name = tempfile.mkstemp(
@@ -236,7 +251,9 @@ def write_hdf5_v2(
                     declaration.name,
                     coordinate,
                     declaration.dims,
-                    unit=declaration.unit,
+                    unit=coordinate.attrs.get(
+                        "unit", coordinate.attrs.get("units", units.get(declaration.name))
+                    ),
                     chunks=chunks,
                 )
             variables_group = handle.create_group("variables")
@@ -248,12 +265,15 @@ def write_hdf5_v2(
                     declaration.name,
                     variable,
                     declaration.dims,
-                    unit=declaration.unit,
+                    unit=variable.attrs.get(
+                        "unit", variable.attrs.get("units", units.get(declaration.name))
+                    ),
                     role=declaration.role,
                     chunks=chunks,
                 )
             metadata_group = handle.create_group("metadata")
             metadata_group.attrs["metadata_json"] = _json_text(metadata, "dataset metadata")
+            metadata_group.attrs["attributes_json"] = attributes_json
         os.replace(temp_path, target)
     except BaseException:
         if temp_path is not None:
@@ -377,6 +397,12 @@ def load_hdf5_v2(path: str | Path, *, selection: Selection | None = None) -> Sci
             validation_summary = _json_attribute(
                 handle.attrs, "validation_summary_json", input_path
             )
+            metadata_group = handle.get("metadata")
+            global_attributes = {}
+            if isinstance(metadata_group, h5py.Group) and "attributes_json" in metadata_group.attrs:
+                global_attributes = _json_attribute(
+                    metadata_group.attrs, "attributes_json", input_path
+                )
             for group_name in _GROUPS:
                 if not isinstance(handle.get(group_name), h5py.Group):
                     raise DataReadError(f"HDF5 2.0 group is missing: {group_name}")
@@ -408,27 +434,27 @@ def load_hdf5_v2(path: str | Path, *, selection: Selection | None = None) -> Sci
             unknown = [name for name in selected_fields if name not in known_fields]
             if unknown:
                 raise DataReadError(f"Unknown HDF5 2.0 selection fields: {unknown}")
-            selected_variables = [name for name in all_variables if name in selected_fields]
+            selected_variables = [name for name in selected_fields if name in all_variables]
             selected_coordinates = (
                 set(all_coordinates)
                 if not has_field_filter
                 else set(name for name in all_coordinates if name in selected_fields)
             )
-            required_coordinates: set[str] = set()
-            for name in selected_variables:
+            selected_dimensions: set[str] = set()
+            for name in selected_fields:
+                group = variables_group if name in all_variables else coordinates_group
                 dims = _json_attribute(
-                    variables_group[name].attrs, "dims_json", input_path, object_only=False
+                    group[name].attrs, "dims_json", input_path, object_only=False
                 )
-                required_coordinates.update(
-                    coordinate_name
-                    for coordinate_name in all_coordinates
-                    if coordinate_name in coordinates_group and coordinate_name in dims
+                selected_dimensions.update(dims)
+            for name in all_coordinates:
+                dims = _json_attribute(
+                    coordinates_group[name].attrs, "dims_json", input_path, object_only=False
                 )
-            selected_coordinates.update(required_coordinates)
+                if set(dims).issubset(selected_dimensions):
+                    selected_coordinates.add(name)
             first_field = (
-                selected_variables[0]
-                if selected_variables
-                else next(iter(selected_coordinates), None)
+                selected_fields[0] if selected_fields else next(iter(all_coordinates), None)
             )
             field_group = variables_group if first_field in variables_group else coordinates_group
             first_dims = (
@@ -481,7 +507,7 @@ def load_hdf5_v2(path: str | Path, *, selection: Selection | None = None) -> Sci
                 metadata["provenance"] = provenance
                 metadata["validation_summary"] = validation_summary
                 metadata["schema"] = schema_payload
-            dataset = xr.Dataset(data_vars=data_vars, coords=coords)
+            dataset = xr.Dataset(data_vars=data_vars, coords=coords, attrs=global_attributes)
     except DataReadError:
         raise
     except (OSError, KeyError, TypeError, ValueError, UnicodeError) as exc:

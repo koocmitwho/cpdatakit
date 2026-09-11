@@ -9,6 +9,7 @@ from pathlib import Path
 
 from ..application.services import _failure, _relative_artifact
 from ..exceptions import OutputExistsError
+from .artifacts import with_registered_artifact
 
 _PROMOTION_LOCK = threading.Lock()
 
@@ -38,7 +39,7 @@ def convert_registered(request, context, *, convert, register):
         try:
             os.replace(staged, target)
             promoted = True
-            register(target)
+            record = register(target)
         except BaseException as exc:
             try:
                 if promoted:
@@ -52,6 +53,8 @@ def convert_registered(request, context, *, convert, register):
                 exc.add_note(f"Previous output retained in {backup}: {recovery_error}")
             raise
         committed = True
+        if record is not None:
+            return with_registered_artifact(result, record)
         artifact = _relative_artifact(target, request.workspace)
         return replace(result, artifact=artifact, value=replace(result.value, artifact=artifact))
     except Exception as exc:

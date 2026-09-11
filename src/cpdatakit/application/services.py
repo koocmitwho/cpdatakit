@@ -639,7 +639,13 @@ def convert_and_write(request: ConvertRequest, *, context=None) -> ServiceResult
             if context is not None:
                 context.checkpoint("write")
             if request.output_format == "hdf5":
-                write_hdf5_v2(dataset, request.output, resolved.schema, force=request.force)
+                write_hdf5_v2(
+                    dataset,
+                    request.output,
+                    resolved.schema,
+                    force=request.force,
+                    allow_invalid=request.allow_invalid,
+                )
             else:
                 writers = {"netcdf": NetCDFWriter, "zarr": ZarrWriter, "parquet": ParquetWriter}
                 if request.output_format not in writers:

@@ -22,7 +22,15 @@ _INK = "#263238"
 rcParams["svg.hashsalt"] = "cpdatakit-0.1"
 
 
-def _unit(schema: ProfileSchema, field: str) -> str:
+def _unit(dataset: Dataset, schema: ProfileSchema, field: str) -> str:
+    units = dataset.metadata.get("units", {})
+    if not isinstance(units, dict):
+        raise CPDataKitError("Dataset units metadata must be an object")
+    if field in units:
+        unit = units[field]
+        if not isinstance(unit, str) or not unit.strip():
+            raise CPDataKitError(f"Invalid stored unit for {field!r}")
+        return unit
     spec = schema.field_map().get(field)
     return spec.unit if spec and spec.unit else "unit not declared"
 
@@ -41,12 +49,14 @@ def plot_stress_strain(dataset: Dataset, schema: str | ProfileSchema) -> tuple[F
     contract = load_schema(schema)
     if "strain" not in dataset.data or "stress" not in dataset.data:
         raise CPDataKitError("stress-strain plot requires declared 'strain' and 'stress' fields")
+    strain_unit = _unit(dataset, contract, "strain")
+    stress_unit = _unit(dataset, contract, "stress")
     fig, ax = plt.subplots(figsize=(7.2, 4.5))
-    ax.plot(dataset.data["strain"], dataset.data["stress"], color=_BLUE, label="Synthetic curve")
+    ax.plot(dataset.data["strain"], dataset.data["stress"], color=_BLUE, label="stress")
     ax.set(
         title="Stress-strain curve",
-        xlabel=f"Strain [{_unit(contract, 'strain')}]",
-        ylabel=f"Stress [{_unit(contract, 'stress')}]",
+        xlabel=f"Strain [{strain_unit}]",
+        ylabel=f"Stress [{stress_unit}]",
     )
     ax.legend(frameon=False)
     return _finish(fig, ax)
@@ -69,11 +79,12 @@ def plot_histogram(
     values = values[np.isfinite(values)]
     if not len(values):
         raise CPDataKitError(f"Histogram field has no finite data: {field}")
+    unit = _unit(dataset, contract, field)
     fig, ax = plt.subplots(figsize=(7.2, 4.5))
     ax.hist(values, bins="auto", color=_BLUE, edgecolor="white", label=field)
     ax.set(
         title=f"Distribution of {field}",
-        xlabel=f"{field} [{_unit(contract, field)}]",
+        xlabel=f"{field} [{unit}]",
         ylabel="Count [records]",
     )
     ax.legend(frameon=False)
@@ -86,7 +97,7 @@ def plot_xy(
     x: str,
     y: str,
 ) -> tuple[Figure, Axes]:
-    """Plot two declared scalar numeric fields with schema-provided units."""
+    """Plot declared scalar fields with stored units or legacy schema defaults."""
     contract = load_schema(schema)
     declared = contract.field_map()
     for field in (x, y):
@@ -103,12 +114,14 @@ def plot_xy(
     finite = np.isfinite(x_values) & np.isfinite(y_values)
     if not finite.any():
         raise CPDataKitError("XY plot fields have no paired finite data")
+    x_unit = _unit(dataset, contract, x)
+    y_unit = _unit(dataset, contract, y)
     fig, ax = plt.subplots(figsize=(7.2, 4.5))
     ax.plot(x_values[finite], y_values[finite], color=_BLUE, label=y)
     ax.set(
         title=f"{y} vs {x}",
-        xlabel=f"{x} [{_unit(contract, x)}]",
-        ylabel=f"{y} [{_unit(contract, y)}]",
+        xlabel=f"{x} [{x_unit}]",
+        ylabel=f"{y} [{y_unit}]",
     )
     ax.legend(frameon=False)
     return _finish(fig, ax)
@@ -133,6 +146,9 @@ def plot_field2d(dataset: Dataset, schema: str | ProfileSchema) -> tuple[Figure,
     needed = {"x", "y", "value"}
     if not needed.issubset(dataset.data):
         raise CPDataKitError("field2d plot requires x, y, and value")
+    x_unit = _unit(dataset, contract, "x")
+    y_unit = _unit(dataset, contract, "y")
+    value_unit = _unit(dataset, contract, "value")
     fig, ax = plt.subplots(figsize=(6.2, 5.2))
     points = ax.scatter(
         dataset.data["x"],
@@ -143,11 +159,11 @@ def plot_field2d(dataset: Dataset, schema: str | ProfileSchema) -> tuple[Figure,
         label="Samples",
     )
     colorbar = fig.colorbar(points, ax=ax)
-    colorbar.set_label(f"Value [{_unit(contract, 'value')}]")
+    colorbar.set_label(f"Value [{value_unit}]")
     ax.set(
         title="Two-dimensional scalar field",
-        xlabel=f"x [{_unit(contract, 'x')}]",
-        ylabel=f"y [{_unit(contract, 'y')}]",
+        xlabel=f"x [{x_unit}]",
+        ylabel=f"y [{y_unit}]",
     )
     ax.legend(frameon=False)
     return _finish(fig, ax)

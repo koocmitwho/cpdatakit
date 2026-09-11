@@ -15,6 +15,7 @@ from ..application import (
     plot_scientific_slice,
 )
 from ..exceptions import CatalogError
+from .artifacts import with_registered_artifact
 
 
 def install_slices(
@@ -87,7 +88,10 @@ def install_slices(
             result = plot_scientific_slice(operation, context=context)
             if result.ok:
                 try:
-                    artifact_registration(project_id, target, kind="slice", metadata=result.value)
+                    record = artifact_registration(
+                        project_id, target, kind="slice", metadata=result.value
+                    )
+                    result = with_registered_artifact(result, record)
                 except BaseException:
                     target.unlink(missing_ok=True)
                     raise

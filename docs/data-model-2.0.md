@@ -42,8 +42,9 @@ in metadata so the reverse operation can identify it without guessing.
 
 The reverse conversion is allowed only when one dimension is explicitly selected as the record axis
 or the value carries the conversion's record-dimension metadata, and every variable can be represented
-as one scalar or fixed-shape value per record. Non-record coordinates are rejected because dropping
-them would be lossy.
+as one scalar or fixed-shape value per record. Non-record coordinates, including scalar coordinates
+such as a test temperature or specimen ID, raise `LossyConversionError` because dropping them
+would be lossy. The original arrays and metadata remain unchanged.
 
 An ambiguous record axis, ragged value, object array, unsupported dtype, missing dimension, or
 implicit unit conversion raises a structured error. The conversion never flattens arrays or guesses

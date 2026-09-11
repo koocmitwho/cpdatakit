@@ -27,6 +27,11 @@ record limits before returning an inspection payload. `convert_and_write` defaul
 for tabular data and HDF5 2.0 for scientific data. Artifact paths are relative to `workspace`.
 Paths outside it are shown as `[outside-workspace]`.
 
+Tabular plots use the units stored in the dataset. For legacy inputs with no unit metadata, labels
+use the selected schema's declarations. Plotting does not change numeric values; use an explicit
+mapping when a different output unit is needed. A mapping's input unit must agree with the stored
+source unit, including scale and offset; equivalent unit aliases are accepted.
+
 v0.7 services read NetCDF, Zarr and Parquet through the format adapters. Requests accept schema 1.0
 and schema 2.0, and `output_format` selects the conversion writer. See the
 [workbench guide](v0.7-workbench.md) for supported formats and the page workflow.

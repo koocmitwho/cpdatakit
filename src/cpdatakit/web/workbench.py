@@ -14,11 +14,13 @@ from typing import Annotated
 from fastapi import File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 
 from ..application import ImportInspectRequest, ReadLimits, import_and_inspect
 from ..application.data_access import contract_dict, path_sha256, resolve_contract
 from ..exceptions import CatalogError, CPDataKitError, SchemaError
 from ..schema import BUILTIN_PROFILES
+from .artifacts import artifact_digest
 
 
 def project_directory(app, project_id: int) -> Path:
@@ -261,6 +263,13 @@ def install_workbench(app, templates, *, csrf_token, session_token, require_csrf
             path = (app.state.workspace / record.relative_path).resolve()
             if not path.is_relative_to(root) or not path.exists():
                 raise CatalogError("Artifact is outside this project or missing")
+            if await run_in_threadpool(artifact_digest, path, record) != record.sha256:
+                return _json_error(
+                    409,
+                    "artifact_changed",
+                    "Saved result has changed since registration.",
+                    "Use an unchanged version or regenerate this output.",
+                )
             headers = {"X-Content-Type-Options": "nosniff"}
             if path.is_dir():
                 descriptor, temporary = tempfile.mkstemp(suffix=".zip")
@@ -292,7 +301,7 @@ def install_workbench(app, templates, *, csrf_token, session_token, require_csrf
             if record.kind == "slice" and not download:
                 return FileResponse(path, media_type="image/png", headers=headers)
             return FileResponse(path, filename=path.name, headers=headers)
-        except (CatalogError, OSError):
+        except (CPDataKitError, OSError):
             return _json_error(
                 404,
                 "artifact_not_found",

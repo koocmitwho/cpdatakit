@@ -4,6 +4,17 @@ All notable changes follow Keep a Changelog; versions follow Semantic Versioning
 
 ## [Unreleased]
 
+### Fixed
+
+- Label tabular plots with stored units and use a neutral curve legend. Explicit unit mappings
+  reject conflicting source declarations while accepting equivalent unit aliases.
+- Reject scalar non-record coordinates during tabular conversion. HDF5 2.0 preserves JSON global
+  attributes, associated auxiliary/scalar coordinates, and requested field order during selection.
+- Recompute HDF5 2.0 validation before writing. Invalid data requires explicit `allow_invalid=True`
+  and retains its actual validation failures and unit declarations.
+- Save registered workbench artifacts as independent versions. Reusing an output name keeps older
+  downloads intact; downloads reject changed content, and digest checks run outside the event loop.
+
 ## [0.8.0] - 2026-09-08
 
 ### Fixed

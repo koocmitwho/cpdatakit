@@ -33,13 +33,14 @@ from ..application import (
     plot_declared_fields,
     validate_and_summarize,
 )
-from ..application.data_access import path_sha256
 from ..catalog import ProjectRecord, SQLiteCatalog
+from ..catalog.sqlite import ArtifactRecord
 from ..exceptions import CatalogError, CPDataKitError, JobError, SchemaError
 from ..jobs import JobManager
 from ..jobs.manager import CommittedResult, JobFailure
 from ..provenance import sha256_file
 from ..schema import ProfileSchema
+from .artifacts import register_snapshot, with_registered_artifact
 from .authoring import install_authoring, store_mapping
 from .outputs import convert_registered
 from .slices import install_slices
@@ -275,8 +276,10 @@ def create_app(
     def output_path(project_id: int, raw_name: str) -> Path:
         root = project_root(project_id)
         target = _safe_project_path(workspace_path, root, raw_name)
-        if any(target.is_relative_to(root / folder) for folder in ("uploads", "schemas")):
-            raise ValueError("Outputs cannot replace uploaded datasets or schemas")
+        if target == root or any(
+            target.is_relative_to(root / folder) for folder in ("uploads", "schemas", ".artifacts")
+        ):
+            raise ValueError("Outputs cannot replace inputs, schemas or registered versions")
         return target
 
     def queue_job(
@@ -363,13 +366,13 @@ def create_app(
         *,
         kind: str,
         metadata: dict[str, object],
-    ) -> None:
-        digest_path = path / "manifest.json" if kind == "compare" and path.is_dir() else path
-        catalog.register_artifact(
+    ) -> ArtifactRecord:
+        return register_snapshot(
+            catalog,
+            workspace_path,
             project_id,
             path,
             kind=kind,
-            sha256=path_sha256(digest_path),
             metadata=metadata,
         )
 
@@ -785,12 +788,13 @@ def create_app(
                 )
             )
             if result.ok and target.exists():
-                artifact_registration(
+                record = artifact_registration(
                     project_id,
                     target,
                     kind="report",
                     metadata={"operation": result.operation, "format": format_name},
                 )
+                result = with_registered_artifact(result, record)
             return result.to_dict()
 
         return queue_job(
@@ -878,12 +882,13 @@ def create_app(
                 )
             )
             if result.ok and target.exists():
-                artifact_registration(
+                record = artifact_registration(
                     project_id,
                     target,
                     kind="plot",
                     metadata={"operation": result.operation, "kind": kind},
                 )
+                result = with_registered_artifact(result, record)
             return result.to_dict()
 
         return queue_job(
@@ -939,12 +944,13 @@ def create_app(
                 )
             )
             if result.ok and target.exists():
-                artifact_registration(
+                record = artifact_registration(
                     project_id,
                     target,
                     kind="compare",
                     metadata={"operation": result.operation},
                 )
+                result = with_registered_artifact(result, record)
             return result.to_dict()
 
         return queue_job(
