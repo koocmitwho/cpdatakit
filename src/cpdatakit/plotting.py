@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 from pathlib import Path
 
 import matplotlib
@@ -13,6 +15,7 @@ from matplotlib import rcParams
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
+from ._atomic import cleanup_staged_file, publish_file
 from .exceptions import CPDataKitError, OutputExistsError
 from .model import Dataset
 from .schema import ProfileSchema, load_schema
@@ -178,5 +181,15 @@ def save_figure(fig: Figure, output: str | Path, *, force: bool = False) -> Path
         raise OutputExistsError(f"Output already exists: {target}; pass force=True to replace it")
     target.parent.mkdir(parents=True, exist_ok=True)
     metadata = {"Date": None} if target.suffix.lower() == ".svg" else {"Software": "CPDataKit"}
-    fig.savefig(target, dpi=180, bbox_inches="tight", metadata=metadata)
+    descriptor, name = tempfile.mkstemp(
+        prefix=f".{target.name}.", suffix=target.suffix, dir=target.parent
+    )
+    os.close(descriptor)
+    temporary = Path(name)
+    try:
+        fig.savefig(temporary, dpi=180, bbox_inches="tight", metadata=metadata)
+        publish_file(temporary, target, force=force)
+    except BaseException:
+        cleanup_staged_file(temporary)
+        raise
     return target

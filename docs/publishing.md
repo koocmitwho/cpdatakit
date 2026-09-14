@@ -11,18 +11,18 @@ timestamp, file-order, or backend drift before a release is published.
 
 ## One-time owner setup
 
-1. Sign in to <https://pypi.org/manage/account/publishing/> with two-factor authentication enabled.
-2. Create a pending publisher with these exact values:
-   - PyPI project name: `cpdatakit`
-   - GitHub owner: `17636365690`
+1. Sign in to <https://pypi.org/manage/project/cpdatakit/settings/publishing/> with two-factor
+   authentication enabled.
+2. Add or verify the Trusted Publisher for the existing `cpdatakit` project with these exact values:
+   - GitHub owner: `koocmitwho`
    - GitHub repository: `cpdatakit`
    - Workflow name: `publish-pypi.yml`
    - Environment name: `pypi`
 3. In GitHub, review the preconfigured `pypi` environment and keep deployment approval enabled.
 
-## First publication
+## Publication
 
-After the pending publisher exists and the release commit is tagged, pushing the `vX.Y.Z` tag
+After the publisher exists and the release commit is tagged, pushing the `vX.Y.Z` tag
 triggers **Publish to PyPI**. The workflow accepts only semantic-version tag refs, verifies that the
 tag commit is on `main`, checks all release metadata before building, and builds both distributions
 from the exact tag. It runs `twine check` and exchanges GitHub's short-lived OIDC identity for a

@@ -11,9 +11,10 @@ function options(select, names, selected) {
 
 export function showSliceResult(result, project) {
   if (result?.operation !== 'plot_scientific_slice' || result.status !== 'succeeded') return;
-  const artifact = project.artifacts.find(item => item.relative_path === result.artifact);
-  if (!artifact) return;
-  const url = `/api/projects/${project.project.id}/artifacts/${artifact.id}`;
+  const artifactId = result.provenance?.artifact_id ??
+    project.artifacts.find(item => item.relative_path === result.artifact)?.id;
+  if (!artifactId) return;
+  const url = `/api/projects/${project.project.id}/artifacts/${artifactId}`;
   const value = result.value;
   const positions = Object.entries(value.slice).map(([name, p]) => `${name}[${p.index}] = ${p.value ?? 'coordinate unavailable'} ${p.unit || ''}`).join('; ');
   document.querySelector('#slice-image').src = url;

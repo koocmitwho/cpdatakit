@@ -7,6 +7,9 @@ v0.8.0 新增选择性读取、多维热图、schema 草案、映射预览和可
 使用方法见[工作流指南](docs/post-v07-workflows.md)，另附
 [读取基准](docs/selective-reading.md)和[KupferDigital/FE 集成案例](examples/cpfe-tensile/README.md)。
 
+v0.8.1 改进数据完整性、批处理中断恢复、多维报告比较和工作台响应，
+并限制任务驻留内存，按需加载资源与历史详情。
+
 > **Alpha 版本：** 验证报告说明记录是否符合所选 schema，物理结果需要结合领域方法解释。
 > 合成示例使用固定随机种子，原始公开数据保留在上游来源。KupferDigital 集成随附按
 > CC-BY-4.0 署名的处理后数据。
@@ -35,19 +38,19 @@ v0.6 还提供 `ScientificDataset`、CPDataKit HDF5 2.0、NetCDF、Zarr 3 和仅
 v0.7 工作台支持多维数据上传、自定义 schema、验证、转换和报告。
 使用方法见 [v0.7 工作台指南](docs/v0.7-workbench.md)。
 
-从 PyPI 安装 v0.8.0：
-
-```powershell
-python -m pip install "cpdatakit==0.8.0"
-```
-
 v0.6.0 要求 Python 3.12 或更高版本，因为 xarray 和 Zarr 已经高于 v0.5 的依赖下限。
 Python 3.10 和 3.11 用户继续使用已发布的 v0.5.x 兼容线。
 
-如果需要固定 GitHub Release wheel，可使用：
+从 PyPI 安装 v0.8.1：
 
 ```powershell
-python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download/v0.8.0/cpdatakit-0.8.0-py3-none-any.whl"
+python -m pip install "cpdatakit==0.8.1"
+```
+
+也可以安装同版本的 GitHub release wheel：
+
+```powershell
+python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download/v0.8.1/cpdatakit-0.8.1-py3-none-any.whl"
 ```
 
 然后按照[五分钟快速教程](https://github.com/koocmitwho/cpdatakit/blob/main/docs/quickstart.md)
@@ -73,7 +76,7 @@ python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download
 ## 项目与集成链接
 
 - [PyPI 软件包](https://pypi.org/project/cpdatakit/)
-- [v0.8.0 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.8.0)
+- [v0.8.1 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.8.1)
 - [v0.5.0 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.5.0)
 - [五分钟快速教程](https://github.com/koocmitwho/cpdatakit/blob/main/docs/quickstart.md)
 - [Schema authoring 与 mapping 指南](https://github.com/koocmitwho/cpdatakit/blob/main/docs/schema-authoring.md)
@@ -189,4 +192,5 @@ Apache-2.0，依赖许可核查见
 [NOTICE](https://github.com/koocmitwho/cpdatakit/blob/main/NOTICE)，引用信息见
 [CITATION.cff](https://github.com/koocmitwho/cpdatakit/blob/main/CITATION.cff)。
 
-[v0.8.0 候选说明](docs/v0.8-release-candidate.md)包含安装方法、验证矩阵和发布步骤。
+本轮改动见 [v0.8.1 发行说明](.github/release-notes/v0.8.1.md)和
+[优化验证记录](docs/verification/2026-09-12-remaining-optimizations.md)。

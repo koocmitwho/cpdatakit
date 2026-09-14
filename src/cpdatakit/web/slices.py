@@ -24,7 +24,7 @@ def install_slices(
     from .app import _json_error
 
     @app.get("/api/projects/{project_id}/datasets/{dataset_id}/structure")
-    async def structure(project_id: int, dataset_id: int):
+    def structure(project_id: int, dataset_id: int):
         try:
             source = dataset_path(project_id, dataset_id)
         except (CatalogError, ValueError):

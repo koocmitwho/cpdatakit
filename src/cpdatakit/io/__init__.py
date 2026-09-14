@@ -14,6 +14,7 @@ import h5py
 import numpy as np
 import pandas as pd
 
+from .._atomic import cleanup_staged_file, publish_file
 from ..exceptions import DataReadError, DataValidationError, OutputExistsError, SchemaError
 from ..model import Dataset, ValidationResult
 from ..provenance import build_provenance
@@ -435,10 +436,10 @@ def write_hdf5(
                 if resolved_chunk_size is not None and len(values):
                     chunks = (min(resolved_chunk_size, len(values)), *values.shape[1:])
                 group.create_dataset(name, data=values, chunks=chunks)
-        os.replace(temp_path, target)
+        publish_file(temp_path, target, force=force)
     except BaseException:
         if temp_path is not None:
-            temp_path.unlink(missing_ok=True)
+            cleanup_staged_file(temp_path)
         raise
     return target
 

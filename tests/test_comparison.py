@@ -206,3 +206,92 @@ def test_write_comparison_bundle_cleans_temporary_directory_after_failure(
 
     assert not output.exists()
     assert list(tmp_path.glob(".bundle.*")) == []
+
+
+def test_comparison_bundle_preserves_target_created_during_render(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cpdatakit import comparison as module
+
+    output = tmp_path / "bundle"
+    original_render = module.render_comparison_markdown
+
+    def render_with_competitor(value):
+        output.mkdir()
+        (output / "owned.txt").write_bytes(b"concurrent output")
+        return original_render(value)
+
+    monkeypatch.setattr(module, "render_comparison_markdown", render_with_competitor)
+    with pytest.raises(OutputExistsError):
+        write_comparison_bundle(compare_reports(_report(), _report()), output)
+    assert (output / "owned.txt").read_bytes() == b"concurrent output"
+    assert list(tmp_path.iterdir()) == [output]
+
+
+@pytest.mark.parametrize("previous_kind", ["directory", "file"])
+def test_comparison_bundle_force_promotion_failure_restores_previous_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, previous_kind: str
+) -> None:
+    from cpdatakit import comparison as module
+    from cpdatakit._atomic import publish_directory
+
+    output = tmp_path / "bundle"
+    if previous_kind == "directory":
+        output.mkdir()
+        previous = output / "previous.txt"
+    else:
+        previous = output
+    previous.write_bytes(b"previous output")
+    original_replace = module.os.replace
+
+    def fail_new_bundle_move(source, destination):
+        source = Path(source)
+        if Path(destination) == output and (source / "comparison.json").is_file():
+            raise OSError("injected promotion failure")
+
+    def replace(source, destination, *args, **kwargs):
+        fail_new_bundle_move(source, destination)
+        return original_replace(source, destination, *args, **kwargs)
+
+    def promote(source, destination):
+        fail_new_bundle_move(source, destination)
+        return publish_directory(source, destination)
+
+    monkeypatch.setattr(module.os, "replace", replace)
+    monkeypatch.setattr(module, "publish_directory", promote, raising=False)
+    with pytest.raises(CPDataKitError, match="promotion failure"):
+        write_comparison_bundle(compare_reports(_report(), _report()), output, force=True)
+    assert previous.read_bytes() == b"previous output"
+    assert list(tmp_path.iterdir()) == [output]
+
+
+def test_comparison_bundle_retains_backup_when_promotion_and_restore_fail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cpdatakit import comparison as module
+    from cpdatakit._atomic import publish_directory
+
+    output = tmp_path / "bundle"
+    output.mkdir()
+    (output / "previous.txt").write_bytes(b"previous output")
+    original_replace = module.os.replace
+
+    def replace(source, destination, *args, **kwargs):
+        if Path(destination) == output:
+            raise OSError("target unavailable")
+        return original_replace(source, destination, *args, **kwargs)
+
+    def promote(source, destination):
+        if Path(destination) == output:
+            raise OSError("target unavailable")
+        return publish_directory(source, destination)
+
+    monkeypatch.setattr(module.os, "replace", replace)
+    monkeypatch.setattr(module, "publish_directory", promote, raising=False)
+    with pytest.raises(CPDataKitError, match=r"[Rr]etained") as failure:
+        write_comparison_bundle(compare_reports(_report(), _report()), output, force=True)
+    backups = list(tmp_path.glob(".bundle.backup-*/previous/previous.txt"))
+    assert len(backups) == 1
+    assert backups[0].read_bytes() == b"previous output"
+    assert str(backups[0].parent) in str(failure.value)
+    assert not output.exists()

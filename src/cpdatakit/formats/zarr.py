@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from .._atomic import publish_directory
 from ..data import ScientificDataset
 from ..exceptions import DataReadError, DataValidationError, OutputExistsError
 from ._metadata import scientific_for_write, scientific_metadata
@@ -153,7 +154,10 @@ class ZarrWriter:
                 backup = Path(tempfile.mkdtemp(prefix=f".{target.name}.backup-", dir=target.parent))
                 os.replace(target, backup / "previous")
             try:
-                os.replace(temporary, target)
+                if force:
+                    os.replace(temporary, target)
+                else:
+                    publish_directory(temporary, target)
             except BaseException as failure:
                 if backup is not None:
                     try:

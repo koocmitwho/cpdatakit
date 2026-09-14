@@ -19,8 +19,9 @@ def register_snapshot(
     *,
     kind: str,
     metadata: dict[str, Any],
+    expected_sha256: str | None = None,
 ) -> ArtifactRecord:
-    """Copy one completed output before registering its immutable version path."""
+    """Register an immutable copy, optionally bound to the producer's completed bytes."""
     root = (workspace / "projects" / str(project_id)).resolve()
     source = path.resolve()
     versions = root / ".artifacts"
@@ -35,6 +36,8 @@ def register_snapshot(
             if entry.is_symlink() or not entry.resolve().is_relative_to(source):
                 raise CatalogError("Artifact contains an external link")
     expected = path_sha256(source)
+    if expected_sha256 is not None and expected != expected_sha256:
+        raise CatalogError("Output changed before its artifact snapshot was created")
     versions.mkdir(exist_ok=True)
     version = Path(tempfile.mkdtemp(prefix="version-", dir=versions))
     snapshot = version / source.name
@@ -67,7 +70,12 @@ def with_registered_artifact(result, record: ArtifactRecord):
     value = result.value
     if hasattr(value, "artifact"):
         value = replace(value, artifact=record.relative_path)
-    return replace(result, artifact=record.relative_path, value=value)
+    return replace(
+        result,
+        artifact=record.relative_path,
+        value=value,
+        provenance={**result.provenance, "artifact_id": record.id},
+    )
 
 
 def artifact_digest(path: Path, record: ArtifactRecord) -> str:

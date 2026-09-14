@@ -14,6 +14,7 @@ import h5py
 import numpy as np
 import xarray as xr
 
+from .._atomic import cleanup_staged_file, publish_file
 from ..data import ScientificDataset
 from ..data.validation import validate_scientific
 from ..exceptions import DataReadError, DataValidationError, OutputExistsError
@@ -274,10 +275,10 @@ def write_hdf5_v2(
             metadata_group = handle.create_group("metadata")
             metadata_group.attrs["metadata_json"] = _json_text(metadata, "dataset metadata")
             metadata_group.attrs["attributes_json"] = attributes_json
-        os.replace(temp_path, target)
+        publish_file(temp_path, target, force=force)
     except BaseException:
         if temp_path is not None:
-            temp_path.unlink(missing_ok=True)
+            cleanup_staged_file(temp_path)
         raise
     return target
 

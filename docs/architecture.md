@@ -1,47 +1,66 @@
 # Architecture
 
-CPDataKit has a generic scientific-data contract core and a crystal-plasticity compatibility
-vertical. The core does not infer physical semantics. It operates on tabular records whose fields,
-units, scalar or fixed per-record shapes, constraints, and conventions are explicitly declared.
+CPDataKit has a scientific-data contract core and a crystal-plasticity compatibility layer.
+It represents tables as Dataset and named multidimensional arrays as ScientificDataset. Units,
+coordinates, tensor order and other scientific meanings come from explicit declarations.
 
-The `src` package separates contracts (`schema`, `model`), boundary failures (`exceptions`),
-read/write (`io`), pure transformations (`normalization`), checks (`validation`), descriptive
-output (`statistics`), structure inspection (`inspection`), offline report rendering (`reporting`),
-graphics (`plotting`), provenance, and the thin `cli` orchestration layer.
+| Area | Responsibility |
+| --- | --- |
+| schema.py, schemas/v2.py | Schema 1.0 fields and schema 2.0 dimensions, coordinates, variables and local composition |
+| model.py, data/ | Data containers and shared scientific validation/unit checks |
+| normalization.py, application/mapping.py | Explicit field, dimension and unit mapping |
+| io/, formats/ | HDF5 1.0/2.0, NetCDF, Zarr and Parquet representations |
+| _atomic.py | Same-filesystem file publication and exclusive directory promotion |
+| inspection.py, statistics.py, reporting.py | Structural inspection, aggregate statistics and offline reports |
+| schema_diff.py, comparison.py, _comparison_v2.py | Version-aware schema and report comparison |
+| application/contracts.py | Typed request and result values, re-exported through application and services |
+| application/services.py | Shared import, validation, conversion, reporting and plotting use cases |
+| application/batch.py | Per-item intent, prepared-result proof and interrupted batch recovery |
+| application/slices.py | Explicit bounded planes and multidimensional heatmaps |
+| catalog/sqlite.py, jobs/manager.py | Durable project/job records, optional paging and bounded in-memory execution |
+| web/app.py | Workspace/session setup, core resource routes and job admission/history |
+| web/operations.py, web/outputs.py | Output forms and shared production/promotion/registration/recovery |
+| web/workbench.py, web/authoring.py, web/slices.py | Project pages, uploads/downloads, drafting, previews and field controls |
+| web/artifacts.py | Independent result versions and digest-bound registration |
 
-The dependency direction is inward. Adapters and CLI create `Dataset` values. Validation and
-normalization consume schemas. HDF5 serialization records results and provenance. Inspection reads
-structure and metadata. Reporting returns validation and statistics results for callers to interpret
-with their domain methods. Public API imports are intentionally small and stable. Built-in schemas
-ship as package resources, so installed wheels resolve them directly. External-format integrations
-use `DatasetAdapter` or a case-specific documented extractor with a focused read-only contract and
-independent evidence. The bundled DAMASK DADF5 reader uses h5py and keeps the DAMASK runtime outside
-the import path.
+The dependency direction is inward. Contracts and data validation have no HTTP, template or
+browser dependency. Readers close backend handles before returning materialized selections.
+Application services translate expected exceptions into structured results; the CLI and Web
+consume the same service and schema comparison boundaries.
 
-The additive `application` package owns the first v0.6 service migration slice: typed import/inspect,
-schema/mapping resolution, validation/summary, HDF5 1.0 conversion, reports, comparisons, and
-declared plots. It translates typed CPDataKit exceptions into sanitized service results, keeps
-artifacts workspace-relative, and has no argparse, HTTP, template, or browser dependency. The CLI
-routes these current data workflows through the service boundary while preserving its v0.5 exit-code
-and output contracts; schema diff remains on its existing path until its adapter is tested.
+The top-level package and application namespace resolve public objects on demand. Public names,
+function signatures and legacy API identities remain available. The CLI parses help, version and
+usage errors before importing scientific or visualization libraries. The contract module can be
+used without importing plotting execution.
 
-Bundled `curve`, `point`, and `field2d` schemas, grain/phase summary enrichment, stress-strain and
-identifier plots, and the DAMASK adapter form the CP vertical. Generic profiles arrive as explicit
-JSON schemas and use the same core without acquiring CP fields or statistics. CP-specific functions
-remain available as compatibility entry points rather than implicit requirements of every profile.
+Tables keep schema/HDF5 1.0 and the legacy CSV/JSON workflow. NetCDF, Zarr and HDF5 2.0 keep named
+arrays and use schema 2.0. Parquet is tabular. Scientific HDF5 writing recomputes validation and
+preserves JSON global attributes; selection retains associated coordinates. Report comparison is
+descriptive and checks representation compatibility, including relevant observed coordinates.
 
-External adapters retain `DatasetAdapter.load(path)`. Optional immutable descriptors and format
-detection are registered in an in-process `AdapterRegistry`; detection identifies representation
-only and never chooses scientific selections. Native CSV, JSON records, and CPDataKit HDF5 stay in
-the core reader boundary.
+Output producers write private staging paths. Workbench operations serialize promotion and
+registration, bind snapshots to the produced digest, and restore only outputs still owned by the
+failing operation. Concurrent changes and failed restoration retain their bytes and recovery
+metadata. Batch execution records intent and prepared output proof before publishing; kernel locks
+release on process exit. These are process-interruption recovery contracts, not a claim of
+power-loss durability on arbitrary filesystems.
 
-The `inspect` boundary uses h5py directly for CPDataKit HDF5 attrs, dataset shape/dtype/chunks, and
-bounded slices. Structure discovery therefore stays independent of full-table materialization. The
-`report` boundary uses the established `Dataset` path required by the validation and statistics APIs,
-then emits aggregate values and sanitized metadata. Its HTML renderer carries a small print
-stylesheet and remains self-contained for offline use.
+Synchronous Web handlers run in FastAPI's worker pool so inspection, validation, mapping previews,
+hashes and archive construction do not occupy the event loop. Jobs wait for successful catalog
+admission before executing. Completed results are persisted before memory retirement; the
+workbench applies queue/log/history limits while standalone JobManager defaults remain compatible.
+Catalog schema v4 stores JSON results, adds project indexes, and creates consistent SQLite backups
+before transactional migrations.
 
-Trust boundaries are explicit: parsers consume declared fields, normalizers work on copies,
-validation reports declared conformance, and callers pass the explicit force option when output
-paths may replace existing files.
+Resource pages request bounded recent summaries. Full job details are fetched when selected;
+historical completed jobs are not polled. Optional API/catalog pagination preserves the previous
+unbounded query defaults for existing callers.
 
+Built-in curve, point and field2d schemas, identifier enrichment, selected plots and the read-only
+DAMASK DADF5 adapter form the CP compatibility layer. Generic schemas do not acquire CP fields.
+External adapters retain DatasetAdapter.load(path), explicit scientific selections, licensed
+fixtures and provenance. Solver execution, new mesh contracts and physical inference are separate
+workflows.
+
+Current workflows and recovery behavior are documented in [post-v07-workflows.md](post-v07-workflows.md).
+Historical design documents remain under superpowers/; they do not replace the current contracts.

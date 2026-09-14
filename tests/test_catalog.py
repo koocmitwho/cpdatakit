@@ -83,7 +83,7 @@ def test_catalog_migration_backs_up_nonempty_database(tmp_path: Path) -> None:
     backup = database.with_name("catalog.sqlite3.bak")
     assert backup.exists()
     with sqlite3.connect(database) as connection:
-        assert connection.execute("PRAGMA user_version").fetchone()[0] == 3
+        assert connection.execute("PRAGMA user_version").fetchone()[0] == 4
         columns = {row[1] for row in connection.execute("PRAGMA table_info(datasets)")}
     assert "metadata_json" in columns
 

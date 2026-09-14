@@ -5,7 +5,9 @@ schema 1.0, HDF5 1.0, or the existing command names.
 
 ## Implemented core contract
 
-`cpdatakit.application` exposes immutable request values and a generic result envelope:
+`cpdatakit.application` exposes immutable request values and a generic result envelope.
+The models live in `application/contracts.py`; existing imports through `application`
+and `application.services` resolve to the same classes:
 
 ```python
 import_and_inspect(ImportInspectRequest) -> ServiceResult[dict[str, Any]]
@@ -72,8 +74,9 @@ returns an open file handle.
 The CLI maps parsed arguments into service requests and owns exit codes and terminal output. The Web
 layer maps forms and JSON into the same requests, owns sessions and CSRF checks, and renders or queues
 the returned result. The Python API may call services directly or keep using the existing functional
-helpers during the migration. All current data, report, comparison, and plot CLI commands use the
-service boundary; the schema-diff command remains on its existing functional path.
+helpers during the migration. Data, report, comparison, plot and schema-diff CLI commands use the
+service boundary. Schema/report comparisons dispatch by schema version and require an explicit
+mapping for cross-version inputs.
 
 No service imports `argparse`, Starlette/FastAPI request types, browser JavaScript, or template
 objects. This keeps CLI, Web, and Python tests independent and prevents a UI concern from changing a
