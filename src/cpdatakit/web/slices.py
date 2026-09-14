@@ -15,6 +15,7 @@ from ..application import (
     plot_scientific_slice,
 )
 from ..exceptions import CatalogError
+from .artifacts import with_registered_artifact
 
 
 def install_slices(
@@ -23,7 +24,7 @@ def install_slices(
     from .app import _json_error
 
     @app.get("/api/projects/{project_id}/datasets/{dataset_id}/structure")
-    async def structure(project_id: int, dataset_id: int):
+    def structure(project_id: int, dataset_id: int):
         try:
             source = dataset_path(project_id, dataset_id)
         except (CatalogError, ValueError):
@@ -87,7 +88,10 @@ def install_slices(
             result = plot_scientific_slice(operation, context=context)
             if result.ok:
                 try:
-                    artifact_registration(project_id, target, kind="slice", metadata=result.value)
+                    record = artifact_registration(
+                        project_id, target, kind="slice", metadata=result.value
+                    )
+                    result = with_registered_artifact(result, record)
                 except BaseException:
                     target.unlink(missing_ok=True)
                     raise

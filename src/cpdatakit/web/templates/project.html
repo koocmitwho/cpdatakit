@@ -8,6 +8,7 @@
   <script type="module" src="{{ url_for('static', path='app.js') }}"></script>
 </head>
 <body data-project-id="{{ project.id }}">
+  <script id="project-resources" type="application/json">{{ resource_state|tojson }}</script>
   <header class="topbar"><a href="/">CPDataKit</a><span>LOCAL WORKBENCH</span></header>
   <main>
     <a class="back" href="/">← All projects</a><h1>{{ project.name }}</h1>
@@ -20,9 +21,11 @@
         <select id="schema" name="schema">
           <optgroup label="Bundled · schema 1.0"><option value="curve">Curve</option><option value="point">Point</option><option value="field2d">2D field</option></optgroup>
           <optgroup label="Project schemas">
-            {% for schema in schemas %}<option value="schema:{{ schema.id }}" {% if loop.last %}selected{% endif %}>{{ schema.name }} · {{ schema.version }} · #{{ schema.id }}</option>{% endfor %}
+            {% for schema in schemas %}<option value="schema:{{ schema.id }}" {% if loop.first %}selected{% endif %}>{{ schema.name }} · {{ schema.version }} · #{{ schema.id }}</option>{% endfor %}
           </optgroup>
         </select>
+        <p class="hint" data-resource-count="schemas">Showing {{ schemas|length }} of {{ resource_state.pagination.counts.schemas }} project schemas</p>
+        <button type="button" class="secondary" data-load-more="schemas" {% if not resource_state.pagination.has_more.schemas %}hidden{% endif %}>Load older schemas</button>
         <p class="hint">Use schema 1.0 for tables and schema 2.0 for multidimensional data.</p>
         <details><summary>Add a custom schema</summary>
           <form data-operation="schema" action="/api/projects/{{ project.id }}/schemas" method="post" enctype="multipart/form-data">
@@ -52,9 +55,11 @@
       <h2><span class="step">3</span> Validate and create results</h2>
       <label for="dataset">Uploaded dataset</label>
       <select id="dataset" name="dataset_id" {% if not datasets %}disabled{% endif %}>
-        {% for dataset in datasets %}<option value="{{ dataset.id }}" {% if loop.last %}selected{% endif %}>{{ dataset.relative_path.split('/')[-1] }}</option>
+        {% for dataset in datasets %}<option value="{{ dataset.id }}" {% if loop.first %}selected{% endif %}>{{ dataset.relative_path.split('/')[-1] }}</option>
         {% else %}<option value="">Upload a dataset to continue</option>{% endfor %}
       </select>
+      <p class="hint" data-resource-count="datasets">Showing {{ datasets|length }} of {{ resource_state.pagination.counts.datasets }} datasets</p>
+      <button type="button" class="secondary" data-load-more="datasets" {% if not resource_state.pagination.has_more.datasets %}hidden{% endif %}>Load older datasets</button>
       <form data-operation="validate" action="/api/projects/{{ project.id }}/validate" method="post">
         <button type="submit" data-needs-dataset {% if not datasets %}disabled{% endif %}>Validate dataset</button>
       </form>
@@ -120,10 +125,14 @@
         {% for artifact in artifacts %}<p><a href="/api/projects/{{ project.id }}/artifacts/{{ artifact.id }}" target="_blank" rel="noopener">{{ artifact.relative_path.split('/')[-1] }}</a> <span class="hint">{{ artifact.kind }}</span> · <a href="/api/projects/{{ project.id }}/artifacts/{{ artifact.id }}?download=true">Download</a></p>
         {% else %}<p class="hint">Converted data and reports will appear here.</p>{% endfor %}
       </div>
+      <p class="hint" data-resource-count="artifacts">Showing {{ artifacts|length }} of {{ resource_state.pagination.counts.artifacts }} results</p>
+      <button type="button" class="secondary" data-load-more="artifacts" {% if not resource_state.pagination.has_more.artifacts %}hidden{% endif %}>Load older results</button>
       <h3>Jobs</h3><div id="jobs">
-        {% for job in jobs %}<p data-job-id="{{ job.id }}">{{ job.operation }} · {{ job.status }} · {{ job.output_filename or '' }}</p>
+        {% for job in jobs %}<p data-job-id="{{ job.id }}" data-job-status="{{ job.status }}">{{ job.operation }} · {{ job.status }} · {{ job.output_filename or '' }} {% if job.status in ['succeeded', 'failed', 'cancelled'] %}<button type="button" class="secondary" data-job-details="{{ job.id }}">View details</button>{% endif %}</p>
         {% else %}<p class="hint" id="no-jobs">No jobs yet.</p>{% endfor %}
       </div>
+      <p class="hint" data-resource-count="jobs">Showing {{ jobs|length }} of {{ resource_state.pagination.counts.jobs }} jobs</p>
+      <button type="button" class="secondary" data-load-more="jobs" {% if not resource_state.pagination.has_more.jobs %}hidden{% endif %}>Load older jobs</button>
     </section>
     <footer>Validation checks the fields, dimensions and units declared in your schema.</footer>
   </main>

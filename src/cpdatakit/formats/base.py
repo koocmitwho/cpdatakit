@@ -6,9 +6,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Protocol, TypeAlias, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
-DataValue: TypeAlias = object
+DataValue = object
 
 
 @dataclass(frozen=True, slots=True)

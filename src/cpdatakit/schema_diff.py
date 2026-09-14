@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from .exceptions import CPDataKitError, OutputExistsError
+from ._atomic import publish_file
+from ._comparison_v2 import diff_scientific_schemas
+from .exceptions import CPDataKitError, OutputExistsError, SchemaError
 from .schema import ProfileSchema, schema_sha256, schema_to_canonical_json, validate_schema
+from .schemas import ResolvedSchemaV2, SchemaV2
 
-SchemaInput = str | Path | ProfileSchema | Mapping[str, Any]
+SchemaInput = str | Path | ProfileSchema | Mapping[str, Any] | SchemaV2 | ResolvedSchemaV2
 
 _FIELD_PROPERTIES = (
     "dtype",
@@ -75,6 +79,14 @@ def _requires_mapping(
 
 def diff_schemas(source: SchemaInput, target: SchemaInput) -> dict[str, Any]:
     """Compare two schemas and return a JSON-ready compatibility diff."""
+    source_version, target_version = _schema_version(source), _schema_version(target)
+    if source_version != target_version:
+        raise SchemaError(
+            f"Unsupported schema version combination: {source_version} and {target_version}. "
+            "Cross-version comparison requires explicit schema and data mapping."
+        )
+    if source_version == "2.0":
+        return diff_scientific_schemas(source, target)
     source_contract = validate_schema(source)
     target_contract = validate_schema(target)
     source_canonical = schema_to_canonical_json(source_contract)
@@ -140,6 +152,22 @@ def diff_schemas(source: SchemaInput, target: SchemaInput) -> dict[str, Any]:
     }
 
 
+def _schema_version(source: SchemaInput) -> str | None:
+    if isinstance(source, (ProfileSchema, SchemaV2, ResolvedSchemaV2)):
+        return source.schema_version
+    payload = source
+    if isinstance(source, (str, Path)):
+        if not Path(source).is_file():
+            return validate_schema(source).schema_version
+        try:
+            payload = json.loads(Path(source).read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise SchemaError(f"Cannot read schema {source}: {exc}") from exc
+    if not isinstance(payload, Mapping):
+        raise SchemaError("Schema root must be a JSON object")
+    return payload.get("schema_version")
+
+
 def render_schema_diff_json(diff: Mapping[str, Any]) -> str:
     """Render a schema diff as JSON with stable key order."""
     return json.dumps(diff, indent=2, sort_keys=True, allow_nan=False) + "\n"
@@ -197,6 +225,29 @@ def render_schema_diff_markdown(diff: Mapping[str, Any]) -> str:
         lines.append("| None | |")
     lines.extend(["", "## Conventions", ""])
     lines.append(", ".join(conventions) if conventions else "None")
+    for section in ("dimensions", "coordinates", "variables"):
+        if section not in diff:
+            continue
+        details = diff[section]
+        lines.extend(
+            [
+                "",
+                f"## {section.title()}",
+                "",
+                f"- Order changed: {details['order_changed']}",
+                "",
+                "| Change | Declaration | Properties |",
+                "| --- | --- | --- |",
+            ]
+        )
+        for change in ("added", "removed"):
+            lines.extend(f"| {change.title()} | {name} | |" for name in details[change])
+        lines.extend(
+            f"| Changed | {item['name']} | {', '.join(item['changes'])} |"
+            for item in details["changed"]
+        )
+        if not any(details[key] for key in ("added", "removed", "changed")):
+            lines.append("| None | | |")
     lines.extend(
         [
             "",
@@ -227,9 +278,18 @@ def write_schema_diff(
     target = Path(output)
     if target.exists() and not force:
         raise OutputExistsError(f"Output already exists: {target}; pass --force to replace it")
+    staged = None
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(rendered, encoding="utf-8")
+        with tempfile.NamedTemporaryFile(
+            prefix=f".{target.name}.", dir=target.parent, delete=False
+        ) as stream:
+            staged = Path(stream.name)
+        staged.write_text(rendered, encoding="utf-8")
+        publish_file(staged, target, force=force)
     except OSError as exc:
         raise CPDataKitError(f"Cannot write schema diff output {target}: {exc}") from exc
+    finally:
+        if staged is not None:
+            staged.unlink(missing_ok=True)
     return target

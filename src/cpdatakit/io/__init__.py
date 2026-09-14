@@ -14,6 +14,7 @@ import h5py
 import numpy as np
 import pandas as pd
 
+from .._atomic import cleanup_staged_file, publish_file
 from ..exceptions import DataReadError, DataValidationError, OutputExistsError, SchemaError
 from ..model import Dataset, ValidationResult
 from ..provenance import build_provenance
@@ -435,10 +436,10 @@ def write_hdf5(
                 if resolved_chunk_size is not None and len(values):
                     chunks = (min(resolved_chunk_size, len(values)), *values.shape[1:])
                 group.create_dataset(name, data=values, chunks=chunks)
-        os.replace(temp_path, target)
+        publish_file(temp_path, target, force=force)
     except BaseException:
         if temp_path is not None:
-            temp_path.unlink(missing_ok=True)
+            cleanup_staged_file(temp_path)
         raise
     return target
 
@@ -451,9 +452,16 @@ def load_hdf5_v2(path: str | Path, *, selection: Any | None = None):
     return _load_hdf5_v2(path, selection=selection)
 
 
-def write_hdf5_v2(value: Any, output: str | Path, schema: Any, *, force: bool = False) -> Path:
+def write_hdf5_v2(
+    value: Any,
+    output: str | Path,
+    schema: Any,
+    *,
+    force: bool = False,
+    allow_invalid: bool = False,
+) -> Path:
     """Lazily write an HDF5 2.0 ScientificDataset."""
 
     from .hdf5_v2 import write_hdf5_v2 as _write_hdf5_v2
 
-    return _write_hdf5_v2(value, output, schema, force=force)
+    return _write_hdf5_v2(value, output, schema, force=force, allow_invalid=allow_invalid)

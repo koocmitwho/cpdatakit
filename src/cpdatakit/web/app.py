@@ -7,24 +7,23 @@ import os
 import secrets
 import tempfile
 import threading
-from datetime import datetime, timezone
+from collections import deque
+from contextlib import suppress
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Final
 
-from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi import FastAPI, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from .._atomic import cleanup_staged_file, publish_file
 from ..application import (
     CapabilityRequest,
-    ComparisonRequest,
-    ConvertRequest,
     DatasetRequest,
     ImportInspectRequest,
-    PlotRequest,
     ReadLimits,
-    ReportRequest,
     build_report,
     compare_reports,
     convert_and_write,
@@ -33,15 +32,15 @@ from ..application import (
     plot_declared_fields,
     validate_and_summarize,
 )
-from ..application.data_access import path_sha256
 from ..catalog import ProjectRecord, SQLiteCatalog
-from ..exceptions import CatalogError, CPDataKitError, JobError, SchemaError
+from ..catalog.sqlite import ArtifactRecord
+from ..exceptions import CatalogError, CPDataKitError, JobError, OutputExistsError, SchemaError
 from ..jobs import JobManager
-from ..jobs.manager import CommittedResult, JobFailure
+from ..jobs.manager import CommittedResult, JobCancelled, JobFailure
 from ..provenance import sha256_file
-from ..schema import ProfileSchema
+from .artifacts import register_snapshot
 from .authoring import install_authoring, store_mapping
-from .outputs import convert_registered
+from .operations import install_output_operations
 from .slices import install_slices
 from .workbench import install_workbench, select_schema
 
@@ -122,6 +121,13 @@ def _job_payload(record) -> dict[str, object]:
     }
 
 
+def _job_summary(record) -> dict[str, object]:
+    payload = _job_payload(record)
+    payload.pop("result", None)
+    payload["operation_log"] = payload["operation_log"][-1:]
+    return payload
+
+
 def _json_error(status_code: int, code: str, message: str, action: str) -> JSONResponse:
     return JSONResponse(
         {
@@ -188,6 +194,10 @@ def create_app(
     *,
     max_upload_bytes: int = _DEFAULT_UPLOAD_BYTES,
     max_preview_bytes: int = _DEFAULT_PREVIEW_BYTES,
+    max_pending_jobs: int = 64,
+    max_retained_jobs: int = 256,
+    max_log_entries: int = 256,
+    max_log_entry_chars: int = 512,
 ) -> FastAPI:
     """Create the local UI application rooted at one explicit workspace."""
 
@@ -195,9 +205,20 @@ def create_app(
     workspace_path.mkdir(parents=True, exist_ok=True)
     upload_limit = _positive_int(max_upload_bytes, "max_upload_bytes")
     preview_limit = _positive_int(max_preview_bytes, "max_preview_bytes")
+    retained_limit = _positive_int(max_retained_jobs, "max_retained_jobs")
+    pending_limit = _positive_int(max_pending_jobs, "max_pending_jobs")
+    log_limit = _positive_int(max_log_entries, "max_log_entries")
+    log_chars = _positive_int(max_log_entry_chars, "max_log_entry_chars")
     catalog = SQLiteCatalog(workspace_path / "catalog.sqlite3", workspace_path)
     catalog.initialize()
-    jobs = JobManager()
+    jobs = JobManager(
+        max_pending_jobs=pending_limit,
+        max_log_entries=log_limit,
+        max_log_entry_chars=log_chars,
+    )
+    completed_jobs = deque()
+    completed_ids: set[str] = set()
+    admission_lock = threading.Lock()
     job_projects: dict[str, int] = {}
     catalog_job_lock = threading.Lock()
     session_token = secrets.token_urlsafe(32)
@@ -252,12 +273,9 @@ def create_app(
 
     def dataset_path(project_id: int, dataset_id: int) -> Path:
         root = project_root(project_id)
-        record = next(
-            (item for item in catalog.list_datasets(project_id) if item.id == dataset_id),
-            None,
-        )
-        if record is None:
-            raise CatalogError(f"Dataset does not exist: {dataset_id}")
+        record = catalog.get_dataset(dataset_id)
+        if record.project_id != project_id:
+            raise CatalogError(f"Dataset does not exist in this project: {dataset_id}")
         path = _within(workspace_path, workspace_path / record.relative_path)
         if not (
             path.is_file() or (path.is_dir() and path.suffix.lower() == ".zarr")
@@ -275,8 +293,10 @@ def create_app(
     def output_path(project_id: int, raw_name: str) -> Path:
         root = project_root(project_id)
         target = _safe_project_path(workspace_path, root, raw_name)
-        if any(target.is_relative_to(root / folder) for folder in ("uploads", "schemas")):
-            raise ValueError("Outputs cannot replace uploaded datasets or schemas")
+        if target == root or any(
+            target.is_relative_to(root / folder) for folder in ("uploads", "schemas", ".artifacts")
+        ):
+            raise ValueError("Outputs cannot replace inputs, schemas or registered versions")
         return target
 
     def queue_job(
@@ -287,7 +307,13 @@ def create_app(
         input_path: Path | None = None,
         output_path_value: Path | None = None,
     ) -> Response:
+        admitted = False
+        admission = threading.Event()
+
         def run_service(cancel):
+            admission.wait()
+            if not admitted or cancel.is_set():
+                raise JobCancelled("Job was not admitted for execution")
             result = function(cancel)
             if result.get("status") == "failed":
                 raise JobFailure(result["error"]["message"], result=result)
@@ -296,21 +322,29 @@ def create_app(
             return result
 
         try:
-            handle = jobs.submit(
-                operation,
-                run_service,
-                input_path=input_path,
-                output_path=output_path_value,
-            )
+            with admission_lock:
+                if len(jobs.list()) >= retained_limit + pending_limit:
+                    raise JobError("Job history must be synchronized before accepting more work")
+                handle = jobs.submit(
+                    operation,
+                    run_service,
+                    input_path=input_path,
+                    output_path=output_path_value,
+                )
         except JobError:
             return _json_error(
                 503,
                 "job_unavailable",
                 "The local job manager is unavailable.",
-                "Retry the operation after restarting the local UI.",
+                "Wait for current jobs to finish or retry after checking job history.",
             )
-        record = jobs.get(handle.id)
+
+        def discard_unadmitted(current):
+            with suppress(JobError):
+                jobs.discard(current.id)
+
         try:
+            record = jobs.get(handle.id)
             catalog.register_job(
                 project_id,
                 job_id=record.id,
@@ -322,17 +356,30 @@ def create_app(
                 output_filename=record.output_filename,
                 operation_log=record.operation_log,
                 error=record.error,
+                result=record.result,
             )
-        except CatalogError:
-            jobs.cancel(handle.id)
+            with catalog_job_lock:
+                job_projects[handle.id] = project_id
+            jobs.add_done_callback(handle.id, sync_catalog_job)
+            admitted = True
+        except Exception:
             return _json_error(
                 500,
                 "job_registration_failed",
                 "The job could not be registered in the local catalog.",
                 "Inspect the catalog and retry the operation.",
             )
-        job_projects[handle.id] = project_id
-        jobs.add_done_callback(handle.id, sync_catalog_job)
+        finally:
+            try:
+                if not admitted:
+                    with catalog_job_lock:
+                        job_projects.pop(handle.id, None)
+                    with suppress(JobError):
+                        jobs.cancel(handle.id)
+                    with suppress(JobError):
+                        jobs.add_done_callback(handle.id, discard_unadmitted)
+            finally:
+                admission.set()
         response = JSONResponse(
             {"job_id": handle.id, "operation": operation, "status": "queued"},
             status_code=202,
@@ -343,9 +390,8 @@ def create_app(
         with catalog_job_lock:
             if record.id not in job_projects:
                 return
-            # Polling may carry an older snapshot than the completion callback.
-            current = jobs.get(record.id)
             try:
+                current = jobs.get(record.id)
                 catalog.update_job(
                     current.id,
                     status=current.status.value,
@@ -353,9 +399,20 @@ def create_app(
                     finished_at=current.finished_at,
                     operation_log=current.operation_log,
                     error=current.error,
+                    result=current.result,
                 )
-            except CatalogError:
+            except (JobError, CatalogError):
                 return
+            if current.status.value in {"succeeded", "failed", "cancelled"}:
+                if current.id not in completed_ids:
+                    completed_jobs.append(current.id)
+                    completed_ids.add(current.id)
+                while len(completed_jobs) > retained_limit:
+                    retired = completed_jobs.popleft()
+                    completed_ids.remove(retired)
+                    with suppress(JobError):
+                        jobs.discard(retired)
+                    job_projects.pop(retired, None)
 
     def artifact_registration(
         project_id: int,
@@ -363,14 +420,16 @@ def create_app(
         *,
         kind: str,
         metadata: dict[str, object],
-    ) -> None:
-        digest_path = path / "manifest.json" if kind == "compare" and path.is_dir() else path
-        catalog.register_artifact(
+        expected_sha256: str | None = None,
+    ) -> ArtifactRecord:
+        return register_snapshot(
+            catalog,
+            workspace_path,
             project_id,
             path,
             kind=kind,
-            sha256=path_sha256(digest_path),
             metadata=metadata,
+            expected_sha256=expected_sha256,
         )
 
     @app.get("/health")
@@ -378,7 +437,7 @@ def create_app(
         return _set_session_cookie(JSONResponse({"status": "ok"}), session_token)
 
     @app.get("/", response_class=HTMLResponse)
-    async def home(request: Request) -> Response:
+    def home(request: Request) -> Response:
         projects = catalog.list_projects()
         response = templates.TemplateResponse(
             request=request,
@@ -388,19 +447,26 @@ def create_app(
         return _set_session_cookie(response, session_token)
 
     @app.get("/api/capabilities")
-    async def capabilities() -> Response:
+    def capabilities() -> Response:
         result = discover_capabilities(CapabilityRequest())
         response = JSONResponse(result.to_dict())
         return _set_session_cookie(response, session_token)
 
     @app.get("/api/projects/{project_id}")
-    async def project_detail(project_id: int) -> Response:
+    def project_detail(
+        project_id: int,
+        limit: Annotated[int | None, Query(ge=1, le=200)] = None,
+        offset: Annotated[int, Query(ge=0)] = 0,
+        newest_first: bool = False,
+    ) -> Response:
         try:
             project = catalog.get_project(project_id)
-            datasets = catalog.list_datasets(project_id)
-            artifacts = catalog.list_artifacts(project_id)
-            schemas = catalog.list_schemas(project_id)
-            project_jobs = catalog.list_jobs(project_id)
+            page = {"limit": limit, "offset": offset, "newest_first": newest_first}
+            datasets = catalog.list_datasets(project_id, **page)
+            artifacts = catalog.list_artifacts(project_id, **page)
+            schemas = catalog.list_schemas(project_id, **page)
+            project_jobs = catalog.list_jobs(project_id, include_result=limit is None, **page)
+            counts = catalog.count_resources(project_id) if limit is not None else None
         except CatalogError:
             return _json_error(
                 404,
@@ -408,53 +474,69 @@ def create_app(
                 "The requested project does not exist.",
                 "Return to the project list and choose an existing project.",
             )
-        response = JSONResponse(
-            {
-                "project": {
-                    "id": project.id,
-                    "name": project.name,
-                    "workspace": project.workspace,
-                },
-                "datasets": [
-                    {
-                        "id": item.id,
-                        "project_id": item.project_id,
-                        "relative_path": item.relative_path,
-                        "sha256": item.sha256,
-                        "metadata": item.metadata,
-                    }
-                    for item in datasets
-                ],
-                "artifacts": [
-                    {
-                        "id": item.id,
-                        "project_id": item.project_id,
-                        "relative_path": item.relative_path,
-                        "kind": item.kind,
-                        "sha256": item.sha256,
-                        "metadata": item.metadata,
-                    }
-                    for item in artifacts
-                ],
-                "schemas": [
-                    {
-                        "id": item.id,
-                        "project_id": item.project_id,
-                        "name": item.name,
-                        "version": item.version,
-                        "relative_path": item.relative_path,
-                        "sha256": item.sha256,
-                        "metadata": item.metadata,
-                    }
-                    for item in schemas
-                ],
-                "jobs": [_job_payload(item) for item in project_jobs],
+        payload = {
+            "project": {
+                "id": project.id,
+                "name": project.name,
+                "workspace": project.workspace,
+            },
+            "datasets": [
+                {
+                    "id": item.id,
+                    "project_id": item.project_id,
+                    "relative_path": item.relative_path,
+                    "sha256": item.sha256,
+                    "metadata": item.metadata,
+                }
+                for item in datasets
+            ],
+            "artifacts": [
+                {
+                    "id": item.id,
+                    "project_id": item.project_id,
+                    "relative_path": item.relative_path,
+                    "kind": item.kind,
+                    "sha256": item.sha256,
+                    "metadata": item.metadata,
+                }
+                for item in artifacts
+            ],
+            "schemas": [
+                {
+                    "id": item.id,
+                    "project_id": item.project_id,
+                    "name": item.name,
+                    "version": item.version,
+                    "relative_path": item.relative_path,
+                    "sha256": item.sha256,
+                    "metadata": item.metadata,
+                }
+                for item in schemas
+            ],
+            "jobs": [
+                _job_summary(item) if limit is not None else _job_payload(item)
+                for item in project_jobs
+            ],
+        }
+        if limit is not None:
+            resources = {
+                "datasets": datasets,
+                "artifacts": artifacts,
+                "schemas": schemas,
+                "jobs": project_jobs,
             }
-        )
-        return _set_session_cookie(response, session_token)
+            payload["pagination"] = {
+                "limit": limit,
+                "offset": offset,
+                "counts": counts,
+                "has_more": {
+                    name: offset + len(rows) < counts[name] for name, rows in resources.items()
+                },
+            }
+        return _set_session_cookie(JSONResponse(payload), session_token)
 
     @app.post("/api/projects")
-    async def create_project(
+    def create_project(
         request: Request,
         name: Annotated[str, Form(...)],
         csrf_token_form: Annotated[str | None, Form(alias="csrf_token")] = None,
@@ -480,7 +562,7 @@ def create_app(
         return _set_session_cookie(response, session_token)
 
     @app.post("/api/projects/{project_id}/inspect")
-    async def inspect_upload(
+    def inspect_upload(
         request: Request,
         project_id: int,
         file: Annotated[UploadFile, File()],
@@ -531,7 +613,7 @@ def create_app(
                 temporary_path = Path(temporary.name)
                 total = 0
                 while True:
-                    chunk = await file.read(min(1024 * 1024, upload_limit - total + 1))
+                    chunk = file.file.read(min(1024 * 1024, upload_limit - total + 1))
                     if not chunk:
                         break
                     total += len(chunk)
@@ -545,7 +627,7 @@ def create_app(
                     temporary.write(chunk)
                 temporary.flush()
                 os.fsync(temporary.fileno())
-            os.replace(temporary_path, upload_path)
+            publish_file(temporary_path, upload_path)
         except CatalogError:
             return _json_error(
                 404,
@@ -553,7 +635,14 @@ def create_app(
                 "The requested project does not exist.",
                 "Return to the project list and choose an existing project.",
             )
-        except (OSError, ValueError):
+        except OutputExistsError:
+            return _json_error(
+                409,
+                "upload_exists",
+                "This upload name is already in use.",
+                "Rename the upload and retry.",
+            )
+        except (CPDataKitError, OSError, ValueError):
             return _json_error(
                 400,
                 "upload_rejected",
@@ -561,9 +650,9 @@ def create_app(
                 "Use a regular file with a safe name and retry.",
             )
         finally:
-            await file.close()
+            file.file.close()
             if temporary_path is not None:
-                temporary_path.unlink(missing_ok=True)
+                cleanup_staged_file(temporary_path)
 
         result = import_and_inspect(
             ImportInspectRequest(
@@ -588,17 +677,26 @@ def create_app(
                 metadata={"schema": schema_name, "operation": "import_and_inspect"},
             )
         except (CatalogError, OSError):
+            try:
+                upload_path.unlink(missing_ok=True)
+            except OSError:
+                return _json_error(
+                    500,
+                    "upload_cleanup_failed",
+                    "The upload could not be registered or removed.",
+                    "Inspect the project upload before retrying.",
+                )
             return _json_error(
                 500,
                 "catalog_registration_failed",
-                "The file was stored but could not be registered in the local catalog.",
-                "Inspect the catalog and retry the operation.",
+                "The upload could not be registered in the local catalog.",
+                "Retry the upload after checking the catalog.",
             )
         response = JSONResponse({**result.to_dict(), "dataset_id": dataset_record.id})
         return _set_session_cookie(response, session_token)
 
     @app.post("/api/projects/{project_id}/validate")
-    async def validate_project(
+    def validate_project(
         request: Request,
         project_id: int,
         dataset_id: Annotated[int, Form(...)],
@@ -632,358 +730,38 @@ def create_app(
         response = JSONResponse(result.to_dict(), status_code=200 if result.ok else 400)
         return _set_session_cookie(response, session_token)
 
-    @app.post("/api/projects/{project_id}/convert")
-    async def convert_project(
-        request: Request,
-        project_id: int,
-        dataset_id: Annotated[int, Form(...)],
-        output_name: Annotated[str, Form(alias="output")],
-        schema_name: Annotated[str, Form(alias="schema")] = "curve",
-        force: Annotated[bool, Form()] = False,
-        output_format: Annotated[str, Form()] = "hdf5",
-        mapping_json: Annotated[str, Form()] = "",
-        csrf_token_form: Annotated[str | None, Form(alias="csrf_token")] = None,
-    ) -> Response:
-        csrf_error = require_csrf(request, csrf_token_form)
-        if csrf_error is not None:
-            return csrf_error
-        try:
-            source = dataset_path(project_id, dataset_id)
-            target = output_path(project_id, output_name)
-        except (CatalogError, ValueError):
-            return _json_error(
-                400,
-                "path_rejected",
-                "The dataset or output path is outside the project workspace.",
-                "Choose an existing dataset and a relative output path.",
+    def stored_job(job_id):
+        record = catalog.get_job(job_id)
+        if record.status in {"running", "queued"}:
+            record = catalog.update_job(
+                job_id,
+                status="failed",
+                finished_at=datetime.now(UTC).isoformat(),
+                operation_log=(*record.operation_log, "interrupted"),
+                error="Job interrupted by a server restart. Submit the operation again.",
+                result=None,
             )
-        try:
-            schema = select_schema(app, project_id, schema_name)
-        except (SchemaError, CatalogError):
-            return _json_error(
-                400,
-                "unsupported_schema",
-                "The selected schema is unavailable in this project.",
-                "Choose a bundled profile or upload a project schema.",
-            )
-        if output_format not in {"hdf5", "netcdf", "zarr", "parquet"}:
-            return _json_error(
-                400,
-                "unsupported_format",
-                "Unknown output format.",
-                "Choose HDF5, NetCDF, Zarr or Parquet.",
-            )
-        if target.exists() and not force:
-            return _json_error(
-                409,
-                "overwrite_confirmation",
-                "The requested output already exists.",
-                "Confirm overwrite explicitly before retrying.",
-            )
-
-        try:
-            mapping = store_mapping(app, project_id, mapping_json)
-        except (CPDataKitError, ValueError):
-            return _json_error(
-                400,
-                "invalid_mapping",
-                "Mapping JSON is invalid.",
-                "Preview the mapping before conversion.",
-            )
-
-        def work(cancel) -> dict[str, object]:
-            if cancel.is_set():
-                return {"status": "cancelled"}
-            result = convert_registered(
-                ConvertRequest(
-                    data=source,
-                    schema=schema,
-                    output=target,
-                    workspace=workspace_path,
-                    force=force,
-                    output_format=output_format,
-                    mapping=mapping,
-                ),
-                cancel,
-                convert=convert_and_write,
-                register=lambda path: artifact_registration(
-                    project_id,
-                    path,
-                    kind="convert",
-                    metadata={"operation": "convert_and_write", "schema": schema_name},
-                ),
-            )
-            return result.to_dict()
-
-        return queue_job(
-            "convert",
-            work,
-            project_id=project_id,
-            input_path=source,
-            output_path_value=target,
-        )
-
-    @app.post("/api/projects/{project_id}/report")
-    async def report_project(
-        request: Request,
-        project_id: int,
-        dataset_id: Annotated[int, Form(...)],
-        output_name: Annotated[str, Form(alias="output")],
-        schema_name: Annotated[str, Form(alias="schema")] = "curve",
-        format_name: Annotated[str, Form(alias="format")] = "html",
-        force: Annotated[bool, Form()] = False,
-        csrf_token_form: Annotated[str | None, Form(alias="csrf_token")] = None,
-    ) -> Response:
-        csrf_error = require_csrf(request, csrf_token_form)
-        if csrf_error is not None:
-            return csrf_error
-        if format_name not in {"html", "markdown", "json"}:
-            return _json_error(
-                400,
-                "invalid_report_request",
-                "The report schema or format is not supported.",
-                "Choose html, markdown, or json output.",
-            )
-        try:
-            schema = select_schema(app, project_id, schema_name)
-        except (SchemaError, CatalogError):
-            return _json_error(
-                400,
-                "unsupported_schema",
-                "Selected schema is unavailable.",
-                "Choose a project schema or bundled profile.",
-            )
-        try:
-            source = dataset_path(project_id, dataset_id)
-            target = output_path(project_id, output_name)
-        except (CatalogError, ValueError):
-            return _json_error(
-                400,
-                "path_rejected",
-                "The dataset or output path is outside the project workspace.",
-                "Choose an existing dataset and a relative output path.",
-            )
-        if target.exists() and not force:
-            return _json_error(
-                409,
-                "overwrite_confirmation",
-                "The requested output already exists.",
-                "Confirm overwrite explicitly before retrying.",
-            )
-
-        def work(cancel) -> dict[str, object]:
-            if cancel.is_set():
-                return {"status": "cancelled"}
-            result = build_report(
-                ReportRequest(
-                    data=source,
-                    schema=schema,
-                    output=target,
-                    format=format_name,
-                    workspace=workspace_path,
-                    force=force,
-                )
-            )
-            if result.ok and target.exists():
-                artifact_registration(
-                    project_id,
-                    target,
-                    kind="report",
-                    metadata={"operation": result.operation, "format": format_name},
-                )
-            return result.to_dict()
-
-        return queue_job(
-            "report",
-            work,
-            project_id=project_id,
-            input_path=source,
-            output_path_value=target,
-        )
-
-    @app.post("/api/projects/{project_id}/plot")
-    async def plot_project(
-        request: Request,
-        project_id: int,
-        dataset_id: Annotated[int, Form(...)],
-        kind: Annotated[str, Form(...)],
-        output_name: Annotated[str, Form(alias="output")],
-        schema_name: Annotated[str, Form(alias="schema")] = "curve",
-        field: Annotated[str | None, Form()] = None,
-        x: Annotated[str | None, Form()] = None,
-        y: Annotated[str | None, Form()] = None,
-        force: Annotated[bool, Form()] = False,
-        csrf_token_form: Annotated[str | None, Form(alias="csrf_token")] = None,
-    ) -> Response:
-        csrf_error = require_csrf(request, csrf_token_form)
-        if csrf_error is not None:
-            return csrf_error
-        if kind not in {
-            "stress-strain",
-            "histogram",
-            "grain-count",
-            "phase-count",
-            "field2d",
-            "xy",
-        }:
-            return _json_error(
-                400,
-                "invalid_plot_request",
-                "The plot schema or kind is not supported.",
-                "Choose a declared plot kind.",
-            )
-        try:
-            schema = select_schema(app, project_id, schema_name)
-            if not isinstance(schema, (str, ProfileSchema)):
-                raise SchemaError("Plots currently require tabular data and schema 1.0.")
-        except (SchemaError, CatalogError):
-            return _json_error(
-                400,
-                "unsupported_schema",
-                "Plot requires a tabular schema.",
-                "Choose a bundled profile or a custom schema 1.0.",
-            )
-        try:
-            source = dataset_path(project_id, dataset_id)
-            target = output_path(project_id, output_name)
-        except (CatalogError, ValueError):
-            return _json_error(
-                400,
-                "path_rejected",
-                "The dataset or output path is outside the project workspace.",
-                "Choose an existing dataset and a relative output path.",
-            )
-        if target.exists() and not force:
-            return _json_error(
-                409,
-                "overwrite_confirmation",
-                "The requested output already exists.",
-                "Confirm overwrite explicitly before retrying.",
-            )
-
-        def work(cancel) -> dict[str, object]:
-            if cancel.is_set():
-                return {"status": "cancelled"}
-            result = plot_declared_fields(
-                PlotRequest(
-                    data=source,
-                    schema=schema,
-                    output=target,
-                    kind=kind,
-                    field=field,
-                    x=x,
-                    y=y,
-                    workspace=workspace_path,
-                    force=force,
-                )
-            )
-            if result.ok and target.exists():
-                artifact_registration(
-                    project_id,
-                    target,
-                    kind="plot",
-                    metadata={"operation": result.operation, "kind": kind},
-                )
-            return result.to_dict()
-
-        return queue_job(
-            "plot",
-            work,
-            project_id=project_id,
-            input_path=source,
-            output_path_value=target,
-        )
-
-    @app.post("/api/projects/{project_id}/compare")
-    async def compare_project(
-        request: Request,
-        project_id: int,
-        left_name: Annotated[str, Form(alias="left")],
-        right_name: Annotated[str, Form(alias="right")],
-        output_name: Annotated[str, Form(alias="output")],
-        force: Annotated[bool, Form()] = False,
-        csrf_token_form: Annotated[str | None, Form(alias="csrf_token")] = None,
-    ) -> Response:
-        csrf_error = require_csrf(request, csrf_token_form)
-        if csrf_error is not None:
-            return csrf_error
-        try:
-            left = existing_project_file(project_id, left_name)
-            right = existing_project_file(project_id, right_name)
-            target = output_path(project_id, output_name)
-        except (CatalogError, ValueError):
-            return _json_error(
-                400,
-                "path_rejected",
-                "The comparison inputs or output path is outside the project workspace.",
-                "Choose existing project files and a relative output path.",
-            )
-        if target.exists() and not force:
-            return _json_error(
-                409,
-                "overwrite_confirmation",
-                "The requested comparison bundle already exists.",
-                "Confirm overwrite explicitly before retrying.",
-            )
-
-        def work(cancel) -> dict[str, object]:
-            if cancel.is_set():
-                return {"status": "cancelled"}
-            result = compare_reports(
-                ComparisonRequest(
-                    left=left,
-                    right=right,
-                    output=target,
-                    workspace=workspace_path,
-                    force=force,
-                )
-            )
-            if result.ok and target.exists():
-                artifact_registration(
-                    project_id,
-                    target,
-                    kind="compare",
-                    metadata={"operation": result.operation},
-                )
-            return result.to_dict()
-
-        return queue_job(
-            "compare",
-            work,
-            project_id=project_id,
-            input_path=left,
-            output_path_value=target,
-        )
+        return record
 
     @app.get("/api/jobs/{job_id}")
-    async def get_job(job_id: str) -> Response:
+    def get_job(job_id: str) -> Response:
         try:
-            record = jobs.get(job_id)
-        except JobError:
             try:
-                record = catalog.get_job(job_id)
-            except CatalogError:
-                return _json_error(
-                    404,
-                    "job_not_found",
-                    "The requested job does not exist.",
-                    "Refresh the project and choose a known job.",
-                )
-            if record.status in {"running", "queued"}:
-                record = catalog.update_job(
-                    job_id,
-                    status="failed",
-                    finished_at=datetime.now(timezone.utc).isoformat(),
-                    operation_log=(*record.operation_log, "interrupted"),
-                    error="Job interrupted by a server restart. Submit the operation again.",
-                )
-            return _set_session_cookie(JSONResponse(_job_payload(record)), session_token)
-        sync_catalog_job(record)
-        response = JSONResponse(_job_payload(record))
-        return _set_session_cookie(response, session_token)
+                record = jobs.get(job_id)
+                sync_catalog_job(record)
+            except JobError:
+                record = stored_job(job_id)
+        except CatalogError:
+            return _json_error(
+                404,
+                "job_not_found",
+                "The requested job does not exist.",
+                "Refresh the project and choose a known job.",
+            )
+        return _set_session_cookie(JSONResponse(_job_payload(record)), session_token)
 
     @app.post("/api/jobs/{job_id}/cancel")
-    async def cancel_job(
+    def cancel_job(
         request: Request,
         job_id: str,
         csrf_token_form: Annotated[str | None, Form(alias="csrf_token")] = None,
@@ -992,19 +770,37 @@ def create_app(
         if csrf_error is not None:
             return csrf_error
         try:
-            jobs.cancel(job_id)
-            record = jobs.get(job_id)
-        except JobError:
+            try:
+                jobs.cancel(job_id)
+                record = jobs.get(job_id)
+                sync_catalog_job(record)
+            except JobError:
+                record = stored_job(job_id)
+        except CatalogError:
             return _json_error(
                 404,
                 "job_not_found",
                 "The requested job does not exist.",
                 "Refresh the project and choose a known job.",
             )
-        sync_catalog_job(record)
-        response = JSONResponse(_job_payload(record))
-        return _set_session_cookie(response, session_token)
+        return _set_session_cookie(JSONResponse(_job_payload(record)), session_token)
 
+    install_output_operations(
+        app,
+        workspace_path=workspace_path,
+        dataset_path=dataset_path,
+        output_path=output_path,
+        existing_project_file=existing_project_file,
+        require_csrf=require_csrf,
+        queue_job=queue_job,
+        artifact_registration=artifact_registration,
+        select_schema=lambda *args, **kwargs: select_schema(*args, **kwargs),
+        store_mapping=lambda *args, **kwargs: store_mapping(*args, **kwargs),
+        convert_and_write=lambda *args, **kwargs: convert_and_write(*args, **kwargs),
+        build_report=lambda request: build_report(request),
+        plot_declared_fields=lambda request: plot_declared_fields(request),
+        compare_reports=lambda request: compare_reports(request),
+    )
     install_authoring(app, dataset_path=dataset_path, require_csrf=require_csrf)
     install_slices(
         app,

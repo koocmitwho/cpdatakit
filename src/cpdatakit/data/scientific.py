@@ -212,7 +212,7 @@ def _coordinate_columns(value: ScientificDataset, record_dim: str) -> dict[str, 
     for name, coordinate in value.data.coords.items():
         if coordinate.dims == (record_dim,):
             columns[name] = np.asarray(coordinate.values).copy()
-        elif coordinate.dims:
+        else:
             raise LossyConversionError(
                 f"Coordinate {name!r} cannot be represented as a record column without loss"
             )

@@ -42,7 +42,7 @@ def install_authoring(app, *, dataset_path, require_csrf):
     from .app import _json_error
 
     @app.get("/api/projects/{project_id}/datasets/{dataset_id}/schema-draft")
-    async def schema_draft(project_id: int, dataset_id: int):
+    def schema_draft(project_id: int, dataset_id: int):
         try:
             source = dataset_path(project_id, dataset_id)
             result = draft_schema(
@@ -60,7 +60,7 @@ def install_authoring(app, *, dataset_path, require_csrf):
             )
 
     @app.post("/api/projects/{project_id}/mapping-preview")
-    async def mapping_preview(
+    def mapping_preview(
         request: Request,
         project_id: int,
         dataset_id: Annotated[int, Form()],

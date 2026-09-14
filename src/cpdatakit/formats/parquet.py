@@ -10,6 +10,7 @@ from typing import Any
 
 import numpy as np
 
+from .._atomic import cleanup_staged_file, publish_file
 from ..data import ScientificDataset
 from ..exceptions import DataReadError, DataValidationError, OutputExistsError
 from ..model import Dataset
@@ -202,9 +203,9 @@ class ParquetWriter:
             os.close(descriptor)
             temporary = Path(name)
             importlib.import_module("pyarrow.parquet").write_table(table, temporary)
-            os.replace(temporary, target)
+            publish_file(temporary, target, force=force)
         except BaseException:
             if temporary is not None:
-                temporary.unlink(missing_ok=True)
+                cleanup_staged_file(temporary)
             raise
         return target

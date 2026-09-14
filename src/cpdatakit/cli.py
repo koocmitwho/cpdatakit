@@ -11,36 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
-from .application import (
-    ComparisonRequest,
-    ConvertRequest,
-    DatasetRequest,
-    ImportInspectRequest,
-    PlotRequest,
-    ReportRequest,
-    SchemaDiffRequest,
-    convert_and_write,
-    diff_schema_contracts,
-    draft_schema,
-    import_and_inspect,
-    plot_declared_fields,
-    preview_mapping,
-    run_batch,
-    validate_and_summarize,
-)
-from .application import (
-    build_report as build_report_service,
-)
-from .application import (
-    compare_reports as compare_reports_service,
-)
 from .exceptions import CPDataKitError
-from .inspection import (
-    render_inspection_json,
-    render_inspection_text,
-    sanitize_error_message,
-    write_inspection,
-)
 
 
 def _common(parser: argparse.ArgumentParser) -> None:
@@ -179,6 +150,9 @@ def _inspection_status(result: dict[str, Any]) -> int:
 
 
 def _run_inspect(args: argparse.Namespace) -> int:
+    from .application import ImportInspectRequest, import_and_inspect
+    from .inspection import render_inspection_json, render_inspection_text, write_inspection
+
     service_result = import_and_inspect(ImportInspectRequest(data=args.data, schema=args.schema))
     if not service_result.ok or service_result.value is None:
         if service_result.error is None:  # pragma: no cover - ServiceResult enforces this
@@ -199,6 +173,9 @@ def _run_inspect(args: argparse.Namespace) -> int:
 
 
 def _run_report(args: argparse.Namespace) -> int:
+    from .application import ReportRequest
+    from .application import build_report as build_report_service
+
     service_result = build_report_service(
         ReportRequest(
             data=args.data,
@@ -218,6 +195,8 @@ def _run_report(args: argparse.Namespace) -> int:
 
 
 def _run_schema_diff(args: argparse.Namespace) -> int:
+    from .application import SchemaDiffRequest, diff_schema_contracts
+
     service_result = diff_schema_contracts(
         SchemaDiffRequest(
             source=args.source,
@@ -239,6 +218,9 @@ def _run_schema_diff(args: argparse.Namespace) -> int:
 
 
 def _run_compare(args: argparse.Namespace) -> int:
+    from .application import ComparisonRequest
+    from .application import compare_reports as compare_reports_service
+
     service_result = compare_reports_service(
         ComparisonRequest(
             left=args.left,
@@ -288,10 +270,14 @@ def _run_ui(args: argparse.Namespace) -> int:
 
 def _run(args: argparse.Namespace) -> int:
     if args.command == "batch":
+        from .application import run_batch
+
         result = run_batch(args.config, args.manifest, retry=args.retry)
         print(json.dumps(result.to_dict(), indent=2))
         return 0 if result.ok else 1 if result.value is not None else 2
     if args.command == "mapping" or (args.command == "schema" and args.schema_command == "draft"):
+        from .application import DatasetRequest, ImportInspectRequest, draft_schema, preview_mapping
+
         result = (
             draft_schema(ImportInspectRequest(args.data))
             if args.command == "schema"
@@ -314,6 +300,8 @@ def _run(args: argparse.Namespace) -> int:
     if args.command == "plot" and args.kind == "xy" and (not args.x or not args.y):
         raise CPDataKitError("--x and --y are required for xy")
     if args.command in {"validate", "summary"}:
+        from .application import DatasetRequest, validate_and_summarize
+
         service_result = validate_and_summarize(
             DatasetRequest(data=args.data, schema=args.schema, mapping=args.mapping)
         )
@@ -328,6 +316,8 @@ def _run(args: argparse.Namespace) -> int:
             _write_json(service_result.value.summary, args.json_output, args.force)
         return 0 if validation.valid else 1
     if args.command == "convert":
+        from .application import ConvertRequest, convert_and_write
+
         service_result = convert_and_write(
             ConvertRequest(
                 data=args.data,
@@ -347,6 +337,8 @@ def _run(args: argparse.Namespace) -> int:
             raise CPDataKitError(service_result.error.message)
         print(args.output)
         return 0
+    from .application import PlotRequest, plot_declared_fields
+
     service_result = plot_declared_fields(
         PlotRequest(
             data=args.data,
@@ -381,11 +373,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.debug:
             raise
         parser.print_usage(sys.stderr)
-        message = (
-            sanitize_error_message(exc)
-            if args.command in {"inspect", "report", "schema", "compare"}
-            else str(exc)
-        )
+        if args.command in {"inspect", "report", "schema", "compare"}:
+            from .inspection import sanitize_error_message
+
+            message = sanitize_error_message(exc)
+        else:
+            message = str(exc)
         print(f"{parser.prog}: error: {message}", file=sys.stderr)
         return 2
 

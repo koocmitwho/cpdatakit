@@ -4,6 +4,28 @@ All notable changes follow Keep a Changelog; versions follow Semantic Versioning
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-09-14
+
+### Fixed
+
+- Recover prepared batch outputs after interrupted publication and use process-owned locks.
+  Shared file/directory publication prevents concurrent no-force overwrites and retains recovery
+  evidence when an old output cannot be restored safely.
+- Apply the same staged workbench transaction to reports, plots and comparison bundles. Persist
+  job results before dropping memory state, bound queues/logs, and page resource summaries.
+- Compare schema 2.0 reports and aggregates with unit, dimension and related-coordinate checks.
+  Missing or incomparable values retain explicit reasons.
+- Keep blocking workbench operations in worker threads. Load public APIs and CLI services on demand,
+  preserve public object identities, group paired CodeQL updates, and align Ruff with Python 3.12.
+- Label tabular plots with stored units and use a neutral curve legend. Explicit unit mappings
+  reject conflicting source declarations while accepting equivalent unit aliases.
+- Reject scalar non-record coordinates during tabular conversion. HDF5 2.0 preserves JSON global
+  attributes, associated auxiliary/scalar coordinates, and requested field order during selection.
+- Recompute HDF5 2.0 validation before writing. Invalid data requires explicit `allow_invalid=True`
+  and retains its actual validation failures and unit declarations.
+- Save registered workbench artifacts as independent versions. Reusing an output name keeps older
+  downloads intact; downloads reject changed content, and digest checks run outside the event loop.
+
 ## [0.8.0] - 2026-09-08
 
 ### Fixed

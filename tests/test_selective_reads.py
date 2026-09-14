@@ -179,7 +179,8 @@ def test_hdf5_v2_slices_disk_arrays_before_materialization(tmp_path, monkeypatch
         xr.Dataset(
             {"temperature": (("time", "y", "x"), np.arange(120).reshape(6, 4, 5))},
             coords={"time": np.arange(6), "y": np.arange(4), "x": np.arange(5)},
-        )
+        ),
+        {"units": {name: "1" for name in ("temperature", "time", "y", "x")}},
     )
     schema = {
         "schema_version": "2.0",

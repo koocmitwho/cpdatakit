@@ -16,6 +16,9 @@ schema drafts, mapping previews and reproducible batches. See
 [the workflow guide](docs/post-v07-workflows.md), [read benchmarks](docs/selective-reading.md),
 and the [KupferDigital/FE integration case](examples/cpfe-tensile/README.md).
 
+v0.8.1 improves data integrity, interrupted batch recovery, scientific report comparison and
+workbench responsiveness. It also bounds retained job state and loads resource history on demand.
+
 > **Alpha software:** Validation checks records against the selected schema, while physical results
 > need interpretation using domain methods. The KupferDigital integration includes processed data
 > with CC-BY-4.0 attribution.
@@ -61,16 +64,16 @@ units, and identifier semantics come from the explicit schema or mapping. See
 
 ## Install
 
-Install the current release from PyPI:
+Install v0.8.1 from PyPI:
 
 ```bash
-python -m pip install "cpdatakit==0.8.0"
+python -m pip install "cpdatakit==0.8.1"
 ```
 
-For a pinned GitHub v0.8.0 release wheel, use:
+The matching GitHub release wheel is also available:
 
 ```bash
-python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download/v0.8.0/cpdatakit-0.8.0-py3-none-any.whl"
+python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download/v0.8.1/cpdatakit-0.8.1-py3-none-any.whl"
 ```
 
 Then follow the
@@ -130,7 +133,7 @@ The examples and tests cover these paths:
 ## Useful links
 
 - [PyPI package](https://pypi.org/project/cpdatakit/)
-- [v0.8.0 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.8.0)
+- [v0.8.1 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.8.1)
 - [v0.5.0 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.5.0)
 - [Quickstart](https://github.com/koocmitwho/cpdatakit/blob/main/docs/quickstart.md)
 - [Schema authoring and mapping guide](https://github.com/koocmitwho/cpdatakit/blob/main/docs/schema-authoring.md)
@@ -315,5 +318,5 @@ licenses and review notes are in
 [NOTICE](https://github.com/koocmitwho/cpdatakit/blob/main/NOTICE). Bundled examples use fixed-seed
 synthetic data, and public reference files remain available from their upstream records.
 
-For candidate wheel installation, verification and release steps, see the
-[candidate guide](docs/v0.8-release-candidate.md).
+See the [v0.8.1 release notes](.github/release-notes/v0.8.1.md) and
+[optimization verification record](docs/verification/2026-09-12-remaining-optimizations.md).

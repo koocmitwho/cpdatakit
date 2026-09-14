@@ -30,6 +30,9 @@ rows = ParquetReader().load(
 读取结果包含关联坐标、单位、JSON 元数据和源路径，所选数据会加载到内存。
 因此，内存须能容纳选择后的结果。
 
+HDF5 2.0 的字段筛选按维度关联保留 `stage(time)` 等辅助坐标和标量坐标，
+并保留全局 JSON 属性。记录范围作用于 `fields` 中首个字段的首维。
+
 实际读取量取决于 Parquet 页和行组、NetCDF/Zarr 存储块的大小。
 读取使用项目已有的 xarray、h5py 和 PyArrow。
 

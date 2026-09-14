@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from .._atomic import cleanup_staged_file, publish_file
 from ..data import ScientificDataset
 from ..exceptions import DataReadError, DataValidationError, OutputExistsError
 from ._metadata import scientific_for_write, scientific_metadata
@@ -169,9 +170,9 @@ class NetCDFWriter:
             os.close(descriptor)
             temporary = Path(name)
             dataset.to_netcdf(temporary, engine=self.engine)
-            os.replace(temporary, target)
+            publish_file(temporary, target, force=force)
         except BaseException:
             if temporary is not None:
-                temporary.unlink(missing_ok=True)
+                cleanup_staged_file(temporary)
             raise
         return target

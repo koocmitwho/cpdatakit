@@ -5,10 +5,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import tomllib
 from pathlib import Path
 from typing import Any
-
-import tomllib
 
 _REQUIRED = (
     "docs/superpowers/specs/2026-09-02-local-first-scientific-platform-design.md",

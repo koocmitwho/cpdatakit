@@ -19,6 +19,7 @@ from ..application import ImportInspectRequest, ReadLimits, import_and_inspect
 from ..application.data_access import contract_dict, path_sha256, resolve_contract
 from ..exceptions import CatalogError, CPDataKitError, SchemaError
 from ..schema import BUILTIN_PROFILES
+from .artifacts import artifact_digest
 
 
 def project_directory(app, project_id: int) -> Path:
@@ -35,9 +36,11 @@ def select_schema(app, project_id: int, selector: str):
         return selector
     if not selector.startswith("schema:"):
         raise SchemaError("Choose a bundled profile or an uploaded project schema.")
-    schemas = app.state.catalog.list_schemas(project_id)
-    record = next((item for item in schemas if selector == f"schema:{item.id}"), None)
-    if record is None or not record.relative_path:
+    try:
+        record = app.state.catalog.get_schema(int(selector.removeprefix("schema:")))
+    except (CatalogError, ValueError) as exc:
+        raise SchemaError("Selected schema does not belong to this project.") from exc
+    if record.project_id != project_id or not record.relative_path:
         raise SchemaError("Selected schema does not belong to this project.")
     path = app.state.workspace / record.relative_path
     if not path.resolve().is_relative_to(project_directory(app, project_id)):
@@ -54,16 +57,50 @@ def install_workbench(app, templates, *, csrf_token, session_token, require_csrf
     catalog = app.state.catalog
 
     @app.get("/projects/{project_id}")
-    async def project_page(request: Request, project_id: int) -> Response:
+    def project_page(request: Request, project_id: int) -> Response:
         try:
             project_directory(app, project_id)
             context = {
                 "project": catalog.get_project(project_id),
                 "csrf_token": csrf_token,
-                "datasets": catalog.list_datasets(project_id),
-                "schemas": catalog.list_schemas(project_id),
-                "artifacts": catalog.list_artifacts(project_id),
-                "jobs": catalog.list_jobs(project_id),
+                "datasets": catalog.list_datasets(project_id, limit=50, newest_first=True),
+                "schemas": catalog.list_schemas(project_id, limit=50, newest_first=True),
+                "artifacts": catalog.list_artifacts(project_id, limit=50, newest_first=True),
+                "jobs": catalog.list_jobs(
+                    project_id, limit=50, newest_first=True, include_result=False
+                ),
+            }
+            counts = catalog.count_resources(project_id)
+            context["resource_state"] = {
+                "project": {"id": project_id, "name": context["project"].name},
+                "datasets": [
+                    {"id": item.id, "relative_path": item.relative_path}
+                    for item in context["datasets"]
+                ],
+                "schemas": [
+                    {"id": item.id, "name": item.name, "version": item.version}
+                    for item in context["schemas"]
+                ],
+                "artifacts": [
+                    {"id": item.id, "relative_path": item.relative_path, "kind": item.kind}
+                    for item in context["artifacts"]
+                ],
+                "jobs": [
+                    {
+                        "id": item.id,
+                        "operation": item.operation,
+                        "status": item.status,
+                        "output_filename": item.output_filename,
+                        "operation_log": list(item.operation_log[-1:]),
+                    }
+                    for item in context["jobs"]
+                ],
+                "pagination": {
+                    "limit": 50,
+                    "offset": 0,
+                    "counts": counts,
+                    "has_more": {kind: counts[kind] > len(context[kind]) for kind in counts},
+                },
             }
         except CatalogError:
             return _json_error(404, "project_not_found", "Project not found.", "Choose a project.")
@@ -71,7 +108,7 @@ def install_workbench(app, templates, *, csrf_token, session_token, require_csrf
         return _set_session_cookie(response, session_token)
 
     @app.post("/api/projects/{project_id}/schemas")
-    async def upload_schema(
+    def upload_schema(
         request: Request,
         project_id: int,
         file: Annotated[UploadFile, File()],
@@ -84,7 +121,7 @@ def install_workbench(app, templates, *, csrf_token, session_token, require_csrf
             if error is not None:
                 return error
             root = project_directory(app, project_id)
-            payload_bytes = await file.read(min(app.state.upload_limit, 1024 * 1024) + 1)
+            payload_bytes = file.file.read(min(app.state.upload_limit, 1024 * 1024) + 1)
             if len(payload_bytes) > min(app.state.upload_limit, 1024 * 1024):
                 return _json_error(
                     413,
@@ -137,12 +174,12 @@ def install_workbench(app, templates, *, csrf_token, session_token, require_csrf
                 "Upload a valid schema 1.0 or standalone schema 2.0 JSON file.",
             )
         finally:
-            await file.close()
+            file.file.close()
             if target is not None and not registered:
                 target.unlink(missing_ok=True)
 
     @app.post("/api/projects/{project_id}/inspect-zarr")
-    async def inspect_zarr(
+    def inspect_zarr(
         request: Request,
         project_id: int,
         files: Annotated[list[UploadFile], File()],
@@ -198,7 +235,7 @@ def install_workbench(app, templates, *, csrf_token, session_token, require_csrf
                 destination = staging.joinpath(*parts)
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 with destination.open("xb") as stream:
-                    while chunk := await file.read(
+                    while chunk := file.file.read(
                         min(1024 * 1024, app.state.upload_limit - total + 1)
                     ):
                         total += len(chunk)
@@ -243,24 +280,29 @@ def install_workbench(app, templates, *, csrf_token, session_token, require_csrf
             )
         finally:
             for file in files:
-                await file.close()
+                file.file.close()
             if staging is not None:
                 shutil.rmtree(staging)
             if installed is not None and not registered:
                 shutil.rmtree(installed)
 
     @app.get("/api/projects/{project_id}/artifacts/{artifact_id}")
-    async def artifact(project_id: int, artifact_id: int, download: bool = False) -> Response:
+    def artifact(project_id: int, artifact_id: int, download: bool = False) -> Response:
         try:
             root = project_directory(app, project_id)
-            record = next(
-                (a for a in catalog.list_artifacts(project_id) if a.id == artifact_id), None
-            )
-            if record is None:
+            record = catalog.get_artifact(artifact_id)
+            if record.project_id != project_id:
                 raise CatalogError("Artifact not found")
             path = (app.state.workspace / record.relative_path).resolve()
             if not path.is_relative_to(root) or not path.exists():
                 raise CatalogError("Artifact is outside this project or missing")
+            if artifact_digest(path, record) != record.sha256:
+                return _json_error(
+                    409,
+                    "artifact_changed",
+                    "Saved result has changed since registration.",
+                    "Use an unchanged version or regenerate this output.",
+                )
             headers = {"X-Content-Type-Options": "nosniff"}
             if path.is_dir():
                 descriptor, temporary = tempfile.mkstemp(suffix=".zip")
@@ -292,7 +334,7 @@ def install_workbench(app, templates, *, csrf_token, session_token, require_csrf
             if record.kind == "slice" and not download:
                 return FileResponse(path, media_type="image/png", headers=headers)
             return FileResponse(path, filename=path.name, headers=headers)
-        except (CatalogError, OSError):
+        except (CPDataKitError, OSError):
             return _json_error(
                 404,
                 "artifact_not_found",

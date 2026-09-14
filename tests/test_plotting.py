@@ -19,6 +19,12 @@ from cpdatakit.plotting import (
 from cpdatakit.schema import make_field_schema, make_profile_schema
 
 
+@pytest.fixture(autouse=True)
+def close_test_figures():
+    yield
+    plt.close("all")
+
+
 @pytest.mark.parametrize("extension", [".png", ".svg"])
 def test_stress_strain_export(curve: Dataset, tmp_path: Path, extension: str) -> None:
     fig, ax = plot_stress_strain(curve, "curve")

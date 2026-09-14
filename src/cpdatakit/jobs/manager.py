@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -16,7 +16,7 @@ from typing import Any
 from ..exceptions import CPDataKitError, JobError
 from ..inspection import sanitize_error_message, sanitize_for_output
 
-JobFunction = Callable[[threading.Event], Any]
+type JobFunction = Callable[[threading.Event], Any]
 logger = logging.getLogger(__name__)
 
 
@@ -53,7 +53,7 @@ class JobFailure(JobError):
         self.result = result
 
 
-class JobStatus(str, Enum):
+class JobStatus(str, Enum):  # noqa: UP042 - StrEnum changes the public str(JobStatus) contract.
     QUEUED = "queued"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
@@ -88,7 +88,7 @@ class _JobState:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    return datetime.now(UTC).isoformat(timespec="milliseconds")
 
 
 def _basename(path: str | Path | None) -> str | None:
@@ -98,9 +98,28 @@ def _basename(path: str | Path | None) -> str | None:
 class JobManager:
     """Own and cancel in-process jobs without exposing thread or callable handles."""
 
-    def __init__(self, *, max_workers: int = 2) -> None:
+    def __init__(
+        self,
+        *,
+        max_workers: int = 2,
+        max_pending_jobs: int | None = None,
+        max_log_entries: int | None = None,
+        max_log_entry_chars: int | None = None,
+    ) -> None:
         if isinstance(max_workers, bool) or not isinstance(max_workers, int) or max_workers <= 0:
             raise ValueError("max_workers must be a positive integer")
+        for name, value in (
+            ("max_pending_jobs", max_pending_jobs),
+            ("max_log_entries", max_log_entries),
+            ("max_log_entry_chars", max_log_entry_chars),
+        ):
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, int) or value <= 0
+            ):
+                raise ValueError(f"{name} must be a positive integer or None")
+        self._max_pending_jobs = max_pending_jobs
+        self._max_log_entries = max_log_entries
+        self._max_log_entry_chars = max_log_entry_chars
         self._executor = ThreadPoolExecutor(
             max_workers=max_workers, thread_name_prefix="cpdatakit-job"
         )
@@ -118,8 +137,14 @@ class JobManager:
     def _update(self, state: _JobState, **changes: Any) -> None:
         with self._lock:
             record = state.record
-            for item in changes.get("operation_log", ()):
-                changes["operation_log"] = (*record.operation_log, item)
+            if "operation_log" in changes:
+                entries = tuple(
+                    str(item)[: self._max_log_entry_chars] for item in changes["operation_log"]
+                )
+                log = (*record.operation_log, *entries)
+                changes["operation_log"] = (
+                    log[-self._max_log_entries :] if self._max_log_entries is not None else log
+                )
             state.record = JobRecord(
                 id=record.id,
                 operation=record.operation,
@@ -206,6 +231,15 @@ class JobManager:
         with self._lock:
             if self._closed:
                 raise JobError("Job manager is shut down")
+            if (
+                self._max_pending_jobs is not None
+                and sum(
+                    state.record.status in {JobStatus.QUEUED, JobStatus.RUNNING}
+                    for state in self._jobs.values()
+                )
+                >= self._max_pending_jobs
+            ):
+                raise JobError("Maximum pending job capacity reached; wait for a job to finish")
             job_id = uuid.uuid4().hex
             state = _JobState(
                 JobRecord(
@@ -216,7 +250,7 @@ class JobManager:
                     None,
                     _basename(input_path),
                     _basename(output_path),
-                    ("queued",),
+                    ("queued"[: self._max_log_entry_chars],),
                 ),
                 JobContext(),
             )
@@ -257,6 +291,19 @@ class JobManager:
 
         with self._lock:
             return tuple(state.record for state in self._jobs.values())
+
+    def discard(self, job_id: str) -> JobRecord:
+        """Release terminal in-memory state after the caller has persisted its result.
+
+        Active jobs cannot be discarded. Callbacks already subscribed to a job
+        retain their final snapshot even when another callback discards it.
+        """
+        with self._lock:
+            state = self._state(job_id)
+            if state.record.status in {JobStatus.QUEUED, JobStatus.RUNNING}:
+                raise JobError("Only terminal jobs can be discarded")
+            del self._jobs[job_id]
+            return state.record
 
     def cancel(self, job_id: str) -> bool:
         """Request cooperative cancellation; return false for terminal jobs."""

@@ -13,10 +13,12 @@ from numbers import Real
 from pathlib import Path
 from typing import Any
 
+from ._atomic import publish_directory, publish_file
+from ._comparison_v2 import compare_scientific_statistics
 from .exceptions import CPDataKitError, OutputExistsError
 from .inspection import sanitize_for_output
 from .reporting import render_report_json
-from .schema_diff import diff_schemas
+from .schema_diff import diff_schemas, render_schema_diff_markdown
 
 _STATISTICS = ("min", "max", "mean", "std")
 _SCOPE_NOTE = (
@@ -76,7 +78,7 @@ def _metric_value(numeric_fields: Mapping[str, Any], field: str, metric: str) ->
 
 
 def _compare_statistics(
-    left: Mapping[str, Any], right: Mapping[str, Any]
+    left: Mapping[str, Any], right: Mapping[str, Any], schema_diff: Mapping[str, Any] | None = None
 ) -> dict[str, list[dict[str, Any]]]:
     left_stats = _stats_mapping(left)
     right_stats = _stats_mapping(right)
@@ -109,9 +111,21 @@ def _compare_statistics(
         )
 
     for field in field_names:
+        reason = _legacy_comparability_reason(field, schema_diff)
         for metric in _STATISTICS:
             left_value = _metric_value(left_stats, field, metric)
             right_value = _metric_value(right_stats, field, metric)
+            if reason:
+                unavailable.append(
+                    {
+                        "field": field,
+                        "metric": metric,
+                        "left": _safe_value(left_value),
+                        "right": _safe_value(right_value),
+                        "reason": reason,
+                    }
+                )
+                continue
             if _finite_number(left_value) and _finite_number(right_value):
                 if left_value != right_value:
                     changed.append(
@@ -135,12 +149,37 @@ def _compare_statistics(
     return {"changed": changed, "unavailable": unavailable}
 
 
+def _legacy_comparability_reason(field: str, schema_diff: Mapping[str, Any] | None) -> str | None:
+    if schema_diff is None:
+        return None
+    if schema_diff["source"]["profile"] != schema_diff["target"]["profile"]:
+        return "Schema profiles differ; explicit field mapping is required"
+    if schema_diff["conventions_changed"]:
+        return "Schema conventions differ; numeric interpretation is unavailable"
+    fields = schema_diff["fields"]
+    if field in fields["added"] or field in fields["removed"]:
+        return "Field declaration is absent from one schema"
+    for item in fields["changed"]:
+        changes = [key for key in item["changes"] if key not in {"aliases", "description"}]
+        if item["name"] == field and changes:
+            return "Field declaration differs: " + ", ".join(changes)
+    return None
+
+
+def _is_scientific_report(report: Mapping[str, Any]) -> bool:
+    schema, statistics = report.get("schema"), report.get("statistics")
+    return (isinstance(schema, Mapping) and schema.get("schema_version") == "2.0") or (
+        isinstance(statistics, Mapping) and isinstance(statistics.get("fields"), Mapping)
+    )
+
+
 def compare_reports(left: Mapping[str, Any], right: Mapping[str, Any]) -> dict[str, Any]:
     """Compare two report payloads and return JSON-ready aggregate details."""
     left_report = _require_report(left, "left")
     right_report = _require_report(right, "right")
     left_schema = left_report.get("schema")
     right_schema = right_report.get("schema")
+    schema_result = None
     if isinstance(left_schema, Mapping) and isinstance(right_schema, Mapping):
         schema_result = diff_schemas(left_schema, right_schema)
         schema_summary = {
@@ -183,7 +222,11 @@ def compare_reports(left: Mapping[str, Any], right: Mapping[str, Any]) -> dict[s
             "left": left_report.get("validation", {}),
             "right": right_report.get("validation", {}),
         },
-        "statistics": _compare_statistics(left_report, right_report),
+        "statistics": (
+            compare_scientific_statistics(left_report, right_report)
+            if _is_scientific_report(left_report) or _is_scientific_report(right_report)
+            else _compare_statistics(left_report, right_report, schema_result)
+        ),
         "scope_note": _SCOPE_NOTE,
     }
     return dict(sanitize_for_output(result))
@@ -194,6 +237,7 @@ def render_comparison_markdown(comparison: Mapping[str, Any]) -> str:
     value = dict(sanitize_for_output(comparison))
     structure = value.get("structure", {})
     statistics = value.get("statistics", {})
+    scientific = "incomparable" in statistics
     lines = [
         "# CPDataKit Comparison",
         "",
@@ -225,8 +269,8 @@ def render_comparison_markdown(comparison: Mapping[str, Any]) -> str:
             "",
             "## Statistics",
             "",
-            "| Field | Metric | Left | Right | Delta |",
-            "| --- | --- | ---: | ---: | ---: |",
+            "| Field | Metric | Left | Right | Delta |" + (" Unit |" if scientific else ""),
+            "| --- | --- | ---: | ---: | ---: |" + (" --- |" if scientific else ""),
         ]
     )
     changed = statistics.get("changed", []) if isinstance(statistics, Mapping) else []
@@ -234,9 +278,10 @@ def render_comparison_markdown(comparison: Mapping[str, Any]) -> str:
         lines.append(
             f"| {item.get('field')} | {item.get('metric')} | {item.get('left')} | "
             f"{item.get('right')} | {item.get('delta')} |"
+            + (f" {item.get('unit')} |" if scientific else "")
         )
     if not changed:
-        lines.append("| None | | | | |")
+        lines.append("| None | | | | |" + (" |" if scientific else ""))
     unavailable = statistics.get("unavailable", []) if isinstance(statistics, Mapping) else []
     lines.extend(
         [
@@ -254,6 +299,22 @@ def render_comparison_markdown(comparison: Mapping[str, Any]) -> str:
         )
     if not unavailable:
         lines.append("| None | | | |")
+    if "incomparable" in statistics:
+        lines.extend(["", "## Incomparable statistics", "", "| Field | Reason |", "| --- | --- |"])
+        for item in statistics["incomparable"]:
+            lines.append(f"| {item.get('field')} | {item.get('reason')} |")
+        if not statistics["incomparable"]:
+            lines.append("| None | |")
+    schema_diff = value.get("schema", {}).get("diff", {})
+    if "dimensions" in schema_diff:
+        lines.extend(
+            [
+                "",
+                render_schema_diff_markdown(schema_diff).replace(
+                    "# CPDataKit Schema Diff", "## Scientific schema details", 1
+                ),
+            ]
+        )
     lines.extend(
         [
             "",
@@ -299,6 +360,41 @@ def _member_payloads(comparison: Mapping[str, Any]) -> dict[str, str]:
     }
 
 
+def _publish_bundle(staged: Path, target: Path, *, force: bool) -> None:
+    backup: Path | None = None
+    try:
+        if target.is_symlink():
+            raise CPDataKitError("Comparison bundle output must not be a symbolic link")
+        if target.exists():
+            if not force:
+                raise OutputExistsError(f"Output already exists: {target}")
+            backup = Path(tempfile.mkdtemp(prefix=f".{target.name}.backup-", dir=target.parent))
+            os.replace(target, backup / "previous")
+        try:
+            publish_directory(staged, target)
+        except BaseException as failure:
+            if backup is not None and (backup / "previous").exists():
+                previous = backup / "previous"
+                try:
+                    if previous.is_dir():
+                        publish_directory(previous, target)
+                    else:
+                        publish_file(previous, target)
+                except BaseException as recovery_error:
+                    raise CPDataKitError(
+                        f"Cannot publish comparison bundle {target}: {failure}. "
+                        f"Original output retained at {previous}; recovery failed: {recovery_error}"
+                    ) from failure
+            raise
+    except BaseException:
+        if backup is not None and not (backup / "previous").exists():
+            backup.rmdir()
+        raise
+    else:
+        if backup is not None:
+            shutil.rmtree(backup, ignore_errors=True)
+
+
 def write_comparison_bundle(
     comparison: Mapping[str, Any],
     output: str | Path,
@@ -329,12 +425,7 @@ def write_comparison_bundle(
         }
         manifest_text = json.dumps(manifest, indent=2, sort_keys=True, allow_nan=False) + "\n"
         (temporary / "manifest.json").write_bytes(manifest_text.encode("utf-8"))
-        if target.exists():
-            if target.is_dir():
-                shutil.rmtree(target)
-            else:
-                target.unlink()
-        os.replace(temporary, target)
+        _publish_bundle(temporary, target, force=force)
     except BaseException as exc:
         shutil.rmtree(temporary, ignore_errors=True)
         if isinstance(exc, CPDataKitError):
