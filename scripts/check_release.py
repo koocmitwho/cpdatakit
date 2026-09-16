@@ -13,6 +13,31 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 NUMBER = r"(?:0|[1-9][0-9]*)"
 TAG_PATTERN = re.compile(rf"^v(?P<version>{NUMBER}\.{NUMBER}\.{NUMBER})$")
+CURRENT_INSTALL_ENTRIES = (
+    "README.md",
+    "README.zh-CN.md",
+    "docs/quickstart.md",
+    "docs/maintenance.md",
+    "docs/roadmap.md",
+    "docs/post-v07-workflows.md",
+)
+
+
+def verify_install_entries(version: str) -> None:
+    """Check maintained pins and wheel links without consulting a registry."""
+    patterns = (
+        r"cpdatakit(?:\[[^\]]+\])?\s*==\s*([^\s\"'`]+)",
+        r"github\.com/koocmitwho/cpdatakit/releases/download/v([^/\s]+)/",
+        r"cpdatakit-([^/\s]+?)-py3-none-any\.whl",
+    )
+    for entry in CURRENT_INSTALL_ENTRIES:
+        content = (ROOT / entry).read_text(encoding="utf-8")
+        for pattern in patterns:
+            for declared in re.findall(pattern, content):
+                if declared != version:
+                    raise ValueError(
+                        f"Current installation entry {entry} uses {declared}; expected {version}"
+                    )
 
 
 def _match_version(path: Path, pattern: str) -> str:
@@ -51,6 +76,7 @@ def verify_release(tag: str) -> str:
     notes = ROOT / ".github" / "release-notes" / f"v{tag_version}.md"
     if not notes.is_file():
         raise ValueError(f"Missing release notes: {notes.relative_to(ROOT)}")
+    verify_install_entries(tag_version)
     return tag_version
 
 

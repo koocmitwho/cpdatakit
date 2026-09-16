@@ -93,7 +93,65 @@ function environment(initial, responder) {
 }
 
 async function check(name) {
-  if (name === 'historical') {
+  if (name === 'active-history') {
+    const active = {id: 'long', operation: 'report', status: 'running', active: true};
+    const history = Array.from({length: 50}, (_, i) => ({id: `old-${i}`, status: 'succeeded'}));
+    let finish, completed = false;
+    const pending = new Promise(resolve => { finish = resolve; });
+    const env = environment(page({jobs: history, active_jobs: [active]}, 0, {jobs: 62}), url => {
+      if (url === '/api/jobs/long') return pending;
+      if (url === '/api/jobs/long/cancel') return {status: 'running'};
+      if (url.includes('offset=50')) return page({jobs: [active], active_jobs: [active]}, 50, {jobs: 62});
+      return page({jobs: history, active_jobs: completed ? [] : [active]}, 0, {jobs: 62});
+    });
+    const rows = () => env.nodes.get('#jobs').querySelectorAll('[data-job-id="long"]');
+    assert.equal(rows().length, 1, 'A fresh page must display an active job outside the history page');
+    await rows()[0].querySelector('button').click();
+    assert.ok(env.calls.includes('/api/jobs/long/cancel'));
+    await env.run('refreshResources()');
+    await env.nodes.get('[data-load-more="jobs"]').click();
+    assert.equal(rows().length, 1, 'History and active rows must be deduplicated');
+    assert.equal(env.calls.filter(url => url === '/api/jobs/long').length, 1);
+    completed = true;
+    finish({...active, status: 'cancelled', active: false});
+    await new Promise(resolve => setTimeout(resolve, 150));
+    assert.equal(rows().length, 1);
+    assert.equal(rows()[0].dataset.jobStatus, 'cancelled');
+    assert.equal(env.run('watching.size'), 0, 'Completion must stop polling even outside the current history page');
+  } else if (name === 'terminal-refresh-race') {
+    const active = {id: 'long', operation: 'report', status: 'running', active: true};
+    let releaseDetail, releasePage, pageEntered;
+    const detail = new Promise(resolve => { releaseDetail = resolve; });
+    const pageReady = new Promise(resolve => { pageEntered = resolve; });
+    const pendingPage = new Promise(resolve => { releasePage = resolve; });
+    const env = environment(page(), url => {
+      if (url === '/api/jobs/long') return detail;
+      pageEntered(); return pendingPage;
+    });
+    const following = env.run('followJob("long")');
+    const refreshing = env.run('queueResourceRefresh()');
+    await pageReady;
+    releaseDetail({...active, status: 'succeeded', active: false});
+    await new Promise(resolve => setImmediate(resolve));
+    const row = () => env.nodes.get('#jobs').querySelector('[data-job-id="long"]');
+    assert.equal(row().dataset.jobStatus, 'succeeded', 'The detail response establishes the terminal status');
+    releasePage(page({jobs: [active], active_jobs: [active]}));
+    await Promise.all([following, refreshing]);
+    assert.equal(row().dataset.jobStatus, 'succeeded', 'An older active snapshot cannot regress a terminal row');
+    assert.equal(row().querySelector('button').textContent, 'View details');
+    assert.equal(env.run('watching.size'), 0);
+    env.run('renderJobs()');
+    assert.equal(row().dataset.jobStatus, 'succeeded', 'Re-rendering must retain the observed terminal status');
+    assert.equal(env.calls.filter(url => url === '/api/jobs/long').length, 1, 'A terminal job must not restart polling');
+  } else if (name === 'stale-running') {
+    const stale = {id: 'old-session', operation: 'report', status: 'running', active: false};
+    const env = environment(page({jobs: [stale], active_jobs: []}), () => ({...stale, status: 'failed'}));
+    assert.deepEqual(env.calls, [], 'Persisted running rows must not start live polling');
+    const button = env.nodes.get('#jobs').children[0].querySelector('button');
+    assert.equal(button.textContent, 'View details');
+    await button.click();
+    assert.deepEqual(env.calls, ['/api/jobs/old-session']);
+  } else if (name === 'historical') {
     const jobs = Array.from({length: 50}, (_, i) => ({id: `old-${i}`, operation: 'convert', status: 'succeeded'}));
     const env = environment(page({jobs}), url => ({...jobs[0], result: {message: 'Loaded details'}}));
     await new Promise(resolve => setTimeout(resolve, 20));

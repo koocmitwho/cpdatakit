@@ -29,13 +29,13 @@ source .venv/bin/activate
 Install the current release from PyPI:
 
 ```bash
-python -m pip install "cpdatakit==0.8.0"
+python -m pip install "cpdatakit==0.8.1"
 ```
 
-For a pinned GitHub v0.8.0 release wheel, use:
+For a pinned GitHub v0.8.1 release wheel, use:
 
 ```bash
-python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download/v0.8.0/cpdatakit-0.8.0-py3-none-any.whl"
+python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download/v0.8.1/cpdatakit-0.8.1-py3-none-any.whl"
 ```
 
 ## 2. Generate a reproducible example
@@ -102,7 +102,7 @@ cpdatakit ui --workspace cpdatakit-workspace
 The workbench binds to loopback, opens the default browser, and keeps its catalog, uploads, and
 artifacts below the selected workspace. Use `--no-browser` for a headless smoke check.
 
-## 7. Read a window or stream chunks
+## 8. Read a window or stream chunks
 
 For bounded access, use the explicit HDF5 readers:
 
@@ -116,10 +116,10 @@ for chunk in iter_hdf5_chunks("curve.h5", fields=["step", "stress"], chunk_size=
 
 `start` is inclusive and `stop` is exclusive. Field order follows the requested order, and
 every chunk is a `Dataset` with the HDF5 metadata and source path preserved. Reads are sliced
-along the record axis, so vector and tensor values keep their per-record shapes. Use
+along the record axis, so vector and tensor values keep their per-record shapes.
 Choose `load_dataset()` when the existing full-read workflow is sufficient.
 
-## 8. Opt into record-axis HDF5 storage chunks
+## 9. Opt into record-axis HDF5 storage chunks
 
 For a larger sequential-read workload, choose the HDF5 storage layout explicitly while keeping
 the same read APIs:
@@ -149,7 +149,7 @@ vector and tensor trailing dimensions remain intact. It is separate from the rea
 `iter_hdf5_chunks(..., chunk_size=...)` batch size. Use `load_hdf5()` for a selected window,
 `iter_hdf5_chunks()` for bounded iteration, and `load_dataset()` for the existing full-read path.
 
-## 9. Measure read scaling
+## 10. Measure read scaling
 
 From a repository checkout with the development environment active, run both diagnostic sizes:
 

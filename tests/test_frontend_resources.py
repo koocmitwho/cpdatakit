@@ -18,6 +18,9 @@ import pytest
         "stale-page",
         "schema-selection",
         "slice-legacy",
+        "active-history",
+        "terminal-refresh-race",
+        "stale-running",
     ],
 )
 def test_frontend_resource_behavior(behavior):

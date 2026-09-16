@@ -13,7 +13,7 @@ from .._atomic import publish_directory
 from ..data import ScientificDataset
 from ..exceptions import DataReadError, DataValidationError, OutputExistsError
 from ._metadata import scientific_for_write, scientific_metadata
-from ._selection import describe_xarray, materialize, select_xarray
+from ._selection import describe_xarray, materialize_cf_selection
 from .base import CapabilityResult, DetectionResult, ReaderInfo, ReadLimits, Selection, WriterInfo
 
 
@@ -71,7 +71,14 @@ class ZarrReader:
         xarray = _xarray()
         _zarr()
         try:
-            with xarray.open_zarr(input_path, consolidated=False, chunks=None) as dataset:
+            with xarray.open_zarr(
+                input_path,
+                consolidated=False,
+                chunks=None,
+                create_default_indexes=False,
+                decode_times=False,
+                mask_and_scale=False,
+            ) as dataset:
                 data_variables = tuple(dataset.data_vars)
                 record_count = (
                     int(dataset[data_variables[0]].sizes[dataset[data_variables[0]].dims[0]])
@@ -84,7 +91,7 @@ class ZarrReader:
                     "format": "Zarr 3",
                     "dimensions": {name: int(length) for name, length in dataset.sizes.items()},
                     "variables": list(dataset.variables),
-                    "field_details": describe_xarray(dataset),
+                    "field_details": describe_xarray(dataset, decode_cf=True),
                     "record_count": record_count,
                     "store_entries": sum(1 for item in input_path.rglob("*") if item.is_file()),
                 }
@@ -101,8 +108,15 @@ class ZarrReader:
         xarray = _xarray()
         _zarr()
         try:
-            with xarray.open_zarr(input_path, consolidated=False, chunks=None) as opened:
-                dataset = materialize(select_xarray(opened, selection, label="Zarr"), context)
+            with xarray.open_zarr(
+                input_path,
+                consolidated=False,
+                chunks=None,
+                create_default_indexes=False,
+                decode_times=False,
+                mask_and_scale=False,
+            ) as opened:
+                dataset = materialize_cf_selection(opened, selection, label="Zarr", context=context)
             metadata = _metadata(dataset)
             return ScientificDataset(dataset, metadata, input_path)
         except DataReadError:

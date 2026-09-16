@@ -1,5 +1,10 @@
 # Roadmap
 
+The current published release is **v0.8.1**, available from PyPI and GitHub. Follow the
+[quickstart](quickstart.md) for current installation commands. v0.8.1 adds no-clobber publication,
+recoverable output transactions, schema 2.0 report comparisons, bounded jobs and paginated
+workbench history. Earlier milestones below retain their original release context.
+
 - **v0.2.0 (released 2026-08-24):** schema authoring helpers, clearer tensor-valued tabular
   encodings, explicit CLI mapping files, and richer nested-field validation coverage.
 - **v0.3.0 (released 2026-08-30):** strict HDF5 metadata validation, validation-aware atomic

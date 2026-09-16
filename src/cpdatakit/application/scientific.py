@@ -8,7 +8,9 @@ import numpy as np
 import pandas as pd
 
 from ..data import ScientificDataset
+from ..data.units import declared_unit
 from ..data.validation import validate_scientific as validate_scientific
+from ..exceptions import DataValidationError
 from ..model import ValidationResult
 
 
@@ -17,11 +19,17 @@ def summarize_scientific(value: ScientificDataset, validation: ValidationResult)
     fields: dict[str, Any] = {}
     for name, array in value.data.variables.items():
         values = np.asarray(array.values)
+        try:
+            unit = declared_unit(array, value.metadata, name)
+        except DataValidationError:
+            # Validation retains the conflicting declarations. The report must
+            # still be usable without choosing one of those declarations.
+            unit = None
         info: dict[str, Any] = {
             "dims": list(array.dims),
             "shape": list(array.shape),
             "dtype": str(values.dtype),
-            "unit": array.attrs.get("unit", array.attrs.get("units")),
+            "unit": unit,
             "count": int(values.size),
             "missing_count": int(np.count_nonzero(pd.isna(values))),
         }

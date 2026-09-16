@@ -121,12 +121,13 @@ function renderArtifacts() {
 function renderJob(job, row) {
   row.dataset.jobStatus = job.status;
   row.replaceChildren(element('span', `${job.operation} · ${job.status} · ${job.operation_log?.at(-1) || ''} · ${job.output_filename || ''} `));
-  const button = element('button', terminal(job.status) ? 'View details' : 'Cancel', 'secondary');
+  const detailsOnly = terminal(job.status) || job.active === false;
+  const button = element('button', detailsOnly ? 'View details' : 'Cancel', 'secondary');
   button.type = 'button';
   button.addEventListener('click', async () => {
     button.disabled = true;
     try {
-      if (terminal(job.status)) {
+      if (detailsOnly) {
         const detail = await request(`/api/jobs/${job.id}`);
         showResult(`Job ${detail.status}`, detail.result || detail);
         showSliceResult(detail.result, resourceState);
@@ -142,7 +143,8 @@ function renderJob(job, row) {
 function renderJobs() {
   const jobs = document.querySelector('#jobs');
   const previous = new Map([...jobs.querySelectorAll('[data-job-id]')].map(row => [row.dataset.jobId, row]));
-  const rows = resourceState.jobs.map(job => {
+  const visible = uniqueRecords([...resourceState.jobs, ...(resourceState.active_jobs || [])]);
+  const rows = visible.map(job => {
     const row = previous.get(job.id) || element('p'); row.dataset.jobId = job.id;
     renderJob(job, row); previous.delete(job.id); return row;
   });
@@ -150,10 +152,11 @@ function renderJobs() {
   for (const [id, row] of previous) if (watching.has(id)) rows.push(row);
   jobs.replaceChildren(...rows);
   if (!rows.length) jobs.append(element('p', 'No jobs yet.', 'hint'));
-  for (const job of resourceState.jobs) if (!terminal(job.status)) void followJob(job.id);
+  for (const job of visible) if (!terminal(job.status) && job.active !== false) void followJob(job.id);
 }
 
 function applyPage(project, kind, append = false, selectedDataset) {
+  if (kind === 'jobs') resourceState.active_jobs = project.active_jobs || [];
   const current = kind === 'datasets' ? String(selectedDataset ?? dataset.value) : schema.value;
   const prior = resourceState[kind];
   let items = append ? [...prior, ...project[kind]] : [...project[kind]];
@@ -211,8 +214,16 @@ async function followJob(id) {
       renderJob(job, row);
       if (terminal(job.status)) {
         const project = await queueResourceRefresh();
-        showSliceResult(job.result, project);
-        if (job.result) showResult(`Job ${job.status}`, job.result);
+        // A coalesced refresh may have captured an older active snapshot. The
+        // terminal detail we already observed must win in both state and DOM.
+        const {result, ...finished} = job;
+        finished.active = false;
+        finished.operation_log = job.operation_log?.slice(-1) || [];
+        resourceState.active_jobs = (resourceState.active_jobs || []).filter(item => String(item.id) !== id);
+        resourceState.jobs = resourceState.jobs.map(item => String(item.id) === id ? finished : item);
+        renderJob(finished, row);
+        showSliceResult(result, project);
+        if (result) showResult(`Job ${job.status}`, result);
         break;
       }
       await new Promise(resolve => setTimeout(resolve, 500));

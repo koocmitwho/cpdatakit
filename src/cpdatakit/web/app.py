@@ -37,11 +37,11 @@ from ..catalog.sqlite import ArtifactRecord
 from ..exceptions import CatalogError, CPDataKitError, JobError, OutputExistsError, SchemaError
 from ..jobs import JobManager
 from ..jobs.manager import CommittedResult, JobCancelled, JobFailure
-from ..provenance import sha256_file
 from .artifacts import register_snapshot
 from .authoring import install_authoring, store_mapping
 from .operations import install_output_operations
 from .slices import install_slices
+from .uploads import UploadPublication, upload_failure
 from .workbench import install_workbench, select_schema
 
 _SESSION_COOKIE: Final = "cpdatakit_session"
@@ -236,6 +236,21 @@ def create_app(
     app.state.workspace = workspace_path
     app.state.upload_limit = upload_limit
     app.state.preview_limit = preview_limit
+
+    def project_job_summaries(project_id: int) -> dict[str, dict[str, object]]:
+        # The manager is bounded by admission/retention limits. Never infer current
+        # activity from persisted running records left by another app instance.
+        with catalog_job_lock:
+            return {
+                record.id: {
+                    **_job_summary(record),
+                    "active": record.status.value in {"queued", "running"},
+                }
+                for record in jobs.list()
+                if job_projects.get(record.id) == project_id
+            }
+
+    app.state.project_job_summaries = project_job_summaries
 
     @app.middleware("http")
     async def local_host_guard(request: Request, call_next):
@@ -461,6 +476,10 @@ def create_app(
     ) -> Response:
         try:
             project = catalog.get_project(project_id)
+            # Snapshot workers first: a completion during the following history
+            # query remains visible until the client observes its terminal status.
+            live_jobs = project_job_summaries(project_id)
+            active_jobs = [item for item in live_jobs.values() if item["active"]]
             page = {"limit": limit, "offset": offset, "newest_first": newest_first}
             datasets = catalog.list_datasets(project_id, **page)
             artifacts = catalog.list_artifacts(project_id, **page)
@@ -514,9 +533,12 @@ def create_app(
                 for item in schemas
             ],
             "jobs": [
-                _job_summary(item) if limit is not None else _job_payload(item)
+                live_jobs.get(item.id, {**_job_summary(item), "active": False})
+                if limit is not None
+                else _job_payload(item)
                 for item in project_jobs
             ],
+            "active_jobs": active_jobs,
         }
         if limit is not None:
             resources = {
@@ -582,6 +604,7 @@ def create_app(
                 "Choose a bundled profile or upload a project schema.",
             )
         temporary_path: Path | None = None
+        publication = None
         try:
             catalog.get_project(project_id)
             upload_name = _safe_upload_name(file.filename)
@@ -627,8 +650,13 @@ def create_app(
                     temporary.write(chunk)
                 temporary.flush()
                 os.fsync(temporary.fileno())
+            publication = UploadPublication(temporary_path, upload_path, workspace_path)
             publish_file(temporary_path, upload_path)
+            publication.published = True
+            publication.verify()
         except CatalogError:
+            if publication is not None and publication.published:
+                return upload_failure(publication)
             return _json_error(
                 404,
                 "project_not_found",
@@ -663,35 +691,24 @@ def create_app(
             )
         )
         if not result.ok:
-            upload_path.unlink(missing_ok=True)
+            recovery = publication.rollback()
+            if recovery:
+                payload = result.to_dict()
+                payload["recovery"] = recovery
+                return JSONResponse(payload, status_code=400)
             status_code = (
                 413 if result.error and result.error.code == "read_limit_exceeded" else 400
             )
             response = JSONResponse(result.to_dict(), status_code=status_code)
             return _set_session_cookie(response, session_token)
         try:
-            dataset_record = catalog.register_dataset(
+            dataset_record = publication.register(
+                catalog,
                 project_id,
-                upload_path,
-                sha256=sha256_file(upload_path),
                 metadata={"schema": schema_name, "operation": "import_and_inspect"},
             )
-        except (CatalogError, OSError):
-            try:
-                upload_path.unlink(missing_ok=True)
-            except OSError:
-                return _json_error(
-                    500,
-                    "upload_cleanup_failed",
-                    "The upload could not be registered or removed.",
-                    "Inspect the project upload before retrying.",
-                )
-            return _json_error(
-                500,
-                "catalog_registration_failed",
-                "The upload could not be registered in the local catalog.",
-                "Retry the upload after checking the catalog.",
-            )
+        except (CPDataKitError, OSError):
+            return upload_failure(publication)
         response = JSONResponse({**result.to_dict(), "dataset_id": dataset_record.id})
         return _set_session_cookie(response, session_token)
 

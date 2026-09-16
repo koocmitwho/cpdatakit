@@ -4,6 +4,22 @@ All notable changes follow Keep a Changelog; versions follow Semantic Versioning
 
 ## [Unreleased]
 
+### Fixed
+
+- Bind file and Zarr uploads to their produced identity and digest. Rollback quarantines and
+  rechecks owned content, retains changed content with recovery evidence, and keeps successful
+  uploads successful if private staging cleanup fails. Python heatmaps use no-clobber publication.
+- Resolve scientific report units consistently from array attributes and dataset metadata.
+  Conflicting declarations remain validation errors and cannot produce affected comparison deltas.
+- Defer NetCDF and Zarr coordinate indexes and time decoding until after positional selection;
+  reject record limits before coordinate reads and retain exact packed/nanosecond values.
+  CF time types use bounded endpoint probes; mixed-range nonmonotonic axes have a documented
+  difference between subset and full-axis automatic index types.
+- Keep current-instance active jobs visible independently of paginated workbench history;
+  deduplicate rows, preserve cancellation and avoid polling stale jobs from earlier sessions.
+- Point current quickstart installs to v0.8.1 and check the maintained installation entry points
+  against release metadata offline, while preserving historical version records.
+
 ## [0.8.1] - 2026-09-14
 
 ### Fixed

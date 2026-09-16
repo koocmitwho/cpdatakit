@@ -128,7 +128,7 @@
       <p class="hint" data-resource-count="artifacts">Showing {{ artifacts|length }} of {{ resource_state.pagination.counts.artifacts }} results</p>
       <button type="button" class="secondary" data-load-more="artifacts" {% if not resource_state.pagination.has_more.artifacts %}hidden{% endif %}>Load older results</button>
       <h3>Jobs</h3><div id="jobs">
-        {% for job in jobs %}<p data-job-id="{{ job.id }}" data-job-status="{{ job.status }}">{{ job.operation }} · {{ job.status }} · {{ job.output_filename or '' }} {% if job.status in ['succeeded', 'failed', 'cancelled'] %}<button type="button" class="secondary" data-job-details="{{ job.id }}">View details</button>{% endif %}</p>
+        {% for job in visible_jobs %}<p data-job-id="{{ job.id }}" data-job-status="{{ job.status }}">{{ job.operation }} · {{ job.status }} · {{ job.output_filename or '' }} {% if not job.active %}<button type="button" class="secondary" data-job-details="{{ job.id }}">View details</button>{% else %}<button type="button" class="secondary">Cancel</button>{% endif %}</p>
         {% else %}<p class="hint" id="no-jobs">No jobs yet.</p>{% endfor %}
       </div>
       <p class="hint" data-resource-count="jobs">Showing {{ jobs|length }} of {{ resource_state.pagination.counts.jobs }} jobs</p>
