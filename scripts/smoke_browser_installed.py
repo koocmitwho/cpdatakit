@@ -196,7 +196,8 @@ def main() -> None:
     args = parser.parse_args()
     root = args.output_dir.resolve()
     root.mkdir(parents=True, exist_ok=False)
-    python = args.python.resolve()
+    # POSIX venv launchers are symlinks; resolving them selects the base Python.
+    python = args.python.absolute()
     environment = dict(os.environ)
     environment.pop("PYTHONPATH", None)
     environment.pop("PYTHONHOME", None)

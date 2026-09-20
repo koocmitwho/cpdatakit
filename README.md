@@ -11,12 +11,12 @@ engineering data. It began with crystal-plasticity workflows.
 v0.9.0 adds Chinese project screens with step-by-step guidance, clearer results and output-conflict
 messages, and readable offline HTML reports with statistics tables and provenance summaries.
 It also improves numeric fidelity and recovery of job and output records after process interruption.
-Start with the [current Chinese workbench guide](docs/workbench-guide.md).
+Start with the [current Chinese workbench guide](https://github.com/koocmitwho/cpdatakit/blob/main/docs/workbench-guide.md).
 
 v0.8.0 adds selective reads, multidimensional heatmaps, editable
 schema drafts, mapping previews and reproducible batches. See
-[the workflow guide](docs/post-v07-workflows.md), [read benchmarks](docs/selective-reading.md),
-and the [KupferDigital/FE integration case](examples/cpfe-tensile/README.md).
+[the workflow guide](https://github.com/koocmitwho/cpdatakit/blob/main/docs/post-v07-workflows.md), [read benchmarks](https://github.com/koocmitwho/cpdatakit/blob/main/docs/selective-reading.md),
+and the [KupferDigital/FE integration case](https://github.com/koocmitwho/cpdatakit/blob/main/examples/cpfe-tensile/README.md).
 
 v0.8.1 improves data integrity, interrupted batch recovery, scientific report comparison and
 workbench responsiveness. It also bounds retained job state and loads resource history on demand.
@@ -78,7 +78,7 @@ The matching GitHub release wheel is also available:
 python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download/v0.9.0/cpdatakit-0.9.0-py3-none-any.whl"
 ```
 
-Then run `cpdatakit ui` and follow the [Chinese workbench guide](docs/workbench-guide.md).
+Then run `cpdatakit ui` and follow the [Chinese workbench guide](https://github.com/koocmitwho/cpdatakit/blob/main/docs/workbench-guide.md).
 For a command-line walkthrough, the
 [five-minute quickstart](https://github.com/koocmitwho/cpdatakit/blob/main/docs/quickstart.md)
 validates, summarizes, converts, and plots a deterministic example.
@@ -139,7 +139,7 @@ The examples and tests cover these paths:
 - [v0.9.0 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.9.0)
 - [v0.5.0 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.5.0)
 - [Quickstart](https://github.com/koocmitwho/cpdatakit/blob/main/docs/quickstart.md)
-- [Current workbench guide (Chinese)](docs/workbench-guide.md)
+- [Current workbench guide (Chinese)](https://github.com/koocmitwho/cpdatakit/blob/main/docs/workbench-guide.md)
 - [Schema authoring and mapping guide](https://github.com/koocmitwho/cpdatakit/blob/main/docs/schema-authoring.md)
 - [Examples](https://github.com/koocmitwho/cpdatakit/tree/main/examples)
 - [Public Reference Case #1: Surfalex HF](https://github.com/koocmitwho/cpdatakit/tree/main/examples/public-datasets/surfalex-aa6016a)
@@ -326,6 +326,6 @@ licenses and review notes are in
 [NOTICE](https://github.com/koocmitwho/cpdatakit/blob/main/NOTICE). Bundled examples use fixed-seed
 synthetic data, and public reference files remain available from their upstream records.
 
-See the [v0.9.0 release notes](.github/release-notes/v0.9.0.md) and the
-[current workbench guide](docs/workbench-guide.md). Historical validation records remain in
-[`docs/verification/`](docs/verification/).
+See the [v0.9.0 release notes](https://github.com/koocmitwho/cpdatakit/blob/main/.github/release-notes/v0.9.0.md) and the
+[current workbench guide](https://github.com/koocmitwho/cpdatakit/blob/main/docs/workbench-guide.md). Historical validation records remain in
+[`docs/verification/`](https://github.com/koocmitwho/cpdatakit/tree/main/docs/verification/).

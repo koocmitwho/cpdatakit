@@ -18,6 +18,9 @@ All notable changes follow Keep a Changelog; versions follow Semantic Versioning
 
 ### Fixed
 
+- Escape recovery-page form and link attributes at the HTML rendering boundary.
+- Preserve virtual-environment interpreter launchers in the installed-wheel browser check,
+  including POSIX environments whose Python executable is a symbolic link.
 - Honor hidden controls in the workbench stylesheet so pagination and optional panels stay
   hidden when they are unavailable. Label validation results from earlier input selections.
 - Preserve exact integer values and scalar categories across scientific/table conversions;

@@ -343,7 +343,7 @@ def install_recovery(app, *, require_csrf, csrf_token):
                 if candidate["verified"] and item["state"] != "conflict":
                     action = f"/api/projects/{project}/recovery/{item['id']}/{candidate['role']}"
                     forms += (
-                        f'<form method="post" action="{action}">'
+                        f'<form method="post" action="{html.escape(action, quote=True)}">'
                         '<input type="hidden" name="csrf_token" '
                         f'value="{html.escape(csrf_token, quote=True)}">'
                         f"<button>Recover {labels[candidate['role']]} "
@@ -352,12 +352,13 @@ def install_recovery(app, *, require_csrf, csrf_token):
             rows.append(
                 f"<li>{html.escape(item.get('target', item['id']))} · {item['state']}{forms}</li>"
             )
+        project_href = html.escape(f"/projects/{project}", quote=True)
         return HTMLResponse(
             '<html><head><meta charset="utf-8"><title>Recovery · CPDataKit</title></head>'
             "<body><h1>Recovery</h1><p>Verified files are copied to a new location. "
             "Existing outputs and evidence are retained. Conflicts require manual review.</p>"
             f"<ul>{''.join(rows) or '<li>No pending output recovery.</li>'}</ul>"
-            f'<a href="/projects/{project}">Return to project</a></body></html>'
+            f'<a href="{project_href}">Return to project</a></body></html>'
         )
 
     @app.post("/api/projects/{project}/recovery/{identifier}/{role}")

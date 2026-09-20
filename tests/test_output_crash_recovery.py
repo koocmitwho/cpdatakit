@@ -4,7 +4,9 @@ import json
 import os
 import subprocess
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import quote
 
 import pytest
 from test_web_workflows import _csrf, _request
@@ -200,5 +202,70 @@ def test_malformed_recovered_records_are_conflicts_before_offering_actions(tmp_p
         )
         assert response.status_code == 409
         assert json.loads(manifest.read_text(encoding="utf-8")) == payload
+    finally:
+        app.state.close()
+
+
+@pytest.mark.parametrize("project", [1, '1" onmouseover="alert(1)'])
+def test_recovery_page_escapes_link_attributes_at_the_html_boundary(tmp_path, monkeypatch, project):
+    from cpdatakit.web import recovery
+
+    class Page(HTMLParser):
+        def __init__(self, content):
+            super().__init__()
+            self.elements = []
+            self.feed(content)
+
+        def handle_starttag(self, tag, attrs):
+            self.elements.append((tag, dict(attrs)))
+
+    app = create_app(tmp_path)
+    try:
+        # Isolate rendering from FastAPI's integer parsing and the recovery inventory.
+        # Even caller-supplied values must remain data at the final HTML boundary.
+        item = {
+            "id": "a" * 32,
+            "phase": "snapshot_ready",
+            "target": 'projects/1/<script>alert("target")</script>.json',
+            "state": "recoverable",
+            "artifact_ids": [],
+            "candidates": [
+                {
+                    "role": "previous",
+                    "path": "projects/1/previous.json",
+                    "verified": True,
+                    "sha256": "b" * 64,
+                    "destination": "projects/1/recovered/previous.json",
+                }
+            ],
+        }
+        monkeypatch.setattr(recovery, "recovery_inventory", lambda *_: [item])
+        endpoint = next(
+            route.endpoint for route in app.routes if route.path == "/projects/{project}/recovery"
+        )
+        page = Page(endpoint(project).body.decode("utf-8"))
+        assert not any(tag == "script" for tag, _ in page.elements)
+        assert not any(name.startswith("on") for _, attrs in page.elements for name in attrs)
+        forms = [attrs for tag, attrs in page.elements if tag == "form"]
+        assert forms == [
+            {"method": "post", "action": f"/api/projects/{project}/recovery/{'a' * 32}/previous"}
+        ]
+        links = [attrs for tag, attrs in page.elements if tag == "a"]
+        assert links == [{"href": f"/projects/{project}"}]
+        inputs = [attrs for tag, attrs in page.elements if tag == "input"]
+        assert inputs == [
+            {"type": "hidden", "name": "csrf_token", "value": _csrf(_request(app, "GET", "/"))}
+        ]
+    finally:
+        app.state.close()
+
+
+def test_recovery_page_rejects_noninteger_project_ids_before_rendering(tmp_path):
+    app = create_app(tmp_path)
+    try:
+        project = quote('1" onmouseover="alert(1)', safe="")
+        response = _request(app, "GET", f"/projects/{project}/recovery")
+        assert response.status_code == 422
+        assert response.headers["content-type"] == "application/json"
     finally:
         app.state.close()

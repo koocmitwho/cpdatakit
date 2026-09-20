@@ -5,11 +5,11 @@ CPDataKit 是面向科学和工程数据的 Python 工具，通过 schema 定义
 
 v0.9.0 提供中文项目页面、分步操作、明确的结果与同名输出提示，以及带统计表和来源摘要的
 离线 HTML 报告；同时改进数值保真、任务终态保存和进程中断后的输出恢复。
-从[当前工作台指南](docs/workbench-guide.md)开始，完成上传、校验与报告导出。
+从[当前工作台指南](https://github.com/koocmitwho/cpdatakit/blob/main/docs/workbench-guide.md)开始，完成上传、校验与报告导出。
 
 v0.8.0 新增选择性读取、多维热图、schema 草案、映射预览和可复现批处理。
-使用方法见[工作流指南](docs/post-v07-workflows.md)，另附
-[读取基准](docs/selective-reading.md)和[KupferDigital/FE 集成案例](examples/cpfe-tensile/README.md)。
+使用方法见[工作流指南](https://github.com/koocmitwho/cpdatakit/blob/main/docs/post-v07-workflows.md)，另附
+[读取基准](https://github.com/koocmitwho/cpdatakit/blob/main/docs/selective-reading.md)和[KupferDigital/FE 集成案例](https://github.com/koocmitwho/cpdatakit/blob/main/examples/cpfe-tensile/README.md)。
 
 v0.8.1 改进数据完整性、批处理中断恢复、多维报告比较和工作台响应，
 并限制任务驻留内存，按需加载资源与历史详情。
@@ -40,7 +40,7 @@ v0.6 还提供 `ScientificDataset`、CPDataKit HDF5 2.0、NetCDF、Zarr 3 和仅
 ## 安装与快速开始
 
 工作台支持表格和多维数据上传、自定义规则、校验、转换和报告。
-操作步骤见[当前中文工作台指南](docs/workbench-guide.md)。
+操作步骤见[当前中文工作台指南](https://github.com/koocmitwho/cpdatakit/blob/main/docs/workbench-guide.md)。
 
 v0.6.0 要求 Python 3.12 或更高版本，因为 xarray 和 Zarr 已经高于 v0.5 的依赖下限。
 Python 3.10 和 3.11 用户继续使用已发布的 v0.5.x 兼容线。
@@ -57,7 +57,7 @@ python -m pip install "cpdatakit==0.9.0"
 python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download/v0.9.0/cpdatakit-0.9.0-py3-none-any.whl"
 ```
 
-安装后运行 `cpdatakit ui`，按[工作台指南](docs/workbench-guide.md)操作。
+安装后运行 `cpdatakit ui`，按[工作台指南](https://github.com/koocmitwho/cpdatakit/blob/main/docs/workbench-guide.md)操作。
 如果使用命令行，可按[五分钟快速教程](https://github.com/koocmitwho/cpdatakit/blob/main/docs/quickstart.md)
 验证、统计、转换并绘制固定种子生成的示例。
 
@@ -84,7 +84,7 @@ python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download
 - [v0.9.0 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.9.0)
 - [v0.5.0 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.5.0)
 - [五分钟快速教程](https://github.com/koocmitwho/cpdatakit/blob/main/docs/quickstart.md)
-- [当前中文工作台指南](docs/workbench-guide.md)
+- [当前中文工作台指南](https://github.com/koocmitwho/cpdatakit/blob/main/docs/workbench-guide.md)
 - [Schema authoring 与 mapping 指南](https://github.com/koocmitwho/cpdatakit/blob/main/docs/schema-authoring.md)
 - [示例目录](https://github.com/koocmitwho/cpdatakit/tree/main/examples)
 - [公共参考案例 #1：Surfalex HF](https://github.com/koocmitwho/cpdatakit/tree/main/examples/public-datasets/surfalex-aa6016a)
@@ -202,6 +202,6 @@ Apache-2.0，依赖许可核查见
 [NOTICE](https://github.com/koocmitwho/cpdatakit/blob/main/NOTICE)，引用信息见
 [CITATION.cff](https://github.com/koocmitwho/cpdatakit/blob/main/CITATION.cff)。
 
-本轮改动见 [v0.9.0 发行说明](.github/release-notes/v0.9.0.md)和
-[当前工作台指南](docs/workbench-guide.md)。历史验证记录保留在
-[`docs/verification/`](docs/verification/)。
+本轮改动见 [v0.9.0 发行说明](https://github.com/koocmitwho/cpdatakit/blob/main/.github/release-notes/v0.9.0.md)和
+[当前工作台指南](https://github.com/koocmitwho/cpdatakit/blob/main/docs/workbench-guide.md)。历史验证记录保留在
+[`docs/verification/`](https://github.com/koocmitwho/cpdatakit/tree/main/docs/verification/)。
