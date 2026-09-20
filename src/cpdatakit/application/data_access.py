@@ -128,7 +128,7 @@ def summarize_value(value, contract: Contract, validation):
 
 def inspect_input(path: Path, schema: SchemaInput | None, limits: ReadLimits) -> dict[str, Any]:
     size = 0
-    if path.is_dir():
+    if path.is_dir() and path.suffix.lower() != ".zarr":
         for item in path.rglob("*"):
             if item.is_symlink():
                 raise DataReadError("Dataset directories must not contain symbolic links")

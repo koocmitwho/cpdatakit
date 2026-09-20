@@ -1,21 +1,31 @@
 # Maintenance
 
-This document records the v0.6.0 release path. Keep `pyproject.toml` and `CITATION.cff` aligned
+The release documented by this checkout is v0.9.0. Keep `pyproject.toml`, `_version.py` and `CITATION.cff` aligned
 with the current release. For each authorized release, update the version metadata, `CHANGELOG.md`,
 and `CITATION.cff` together, then run every check below before publishing.
 
-The v0.6.0 release requires Python 3.12 or later. Keep Python 3.10 and 3.11 support on the v0.5.x
+The current release requires Python 3.12 or later. Keep Python 3.10 and 3.11 support on the v0.5.x
 maintenance line until a separate maintenance decision is made.
 
-The v0.6 dependency workflow runs wheel-only lower/latest probes on Ubuntu, macOS, and Windows for
-Python 3.12 and 3.13. Runtime metadata uses only the candidate set after every hosted cell passes;
-local Windows/Linux evidence is recorded in `docs/v0.6-dependency-probe.md`.
+The dependency workflow runs wheel-only lower/latest probes on Ubuntu, macOS, and Windows for
+Python 3.12 and 3.13. The current combinations are documented in `docs/v0.8-dependencies.md`;
+the scripts retain their original v0.6 names. Historical Windows/Linux probe evidence remains in
+`docs/v0.6-dependency-probe.md`. Local checks do not establish that the hosted matrix has passed.
 
 ## Exact release checklist
 
+`scripts/check_release.py` checks the current installation pins and wheel URLs in both READMEs,
+`docs/quickstart.md`, `docs/post-v07-workflows.md`, this document and the current roadmap against
+the package metadata.
+Also keep the current [Chinese workbench guide](workbench-guide.md) aligned with the release pin
+and the actual template labels. Historical workbench guides retain their original version context.
+Keep historical release notes, plans and verification records unchanged. This offline gate
+does not require an unpublished candidate to exist on PyPI; verify registry availability and
+distribution hashes after an authorized publication.
+
 1. Run the full supported-Python test matrix: Ubuntu, macOS, and Windows, each with Python 3.12
    and 3.13, installing `.[dev]` and running `pytest`. The separate `minimum-dependencies` CI job
-   installs the measured v0.6 lower-bound runtime ranges and the test dependencies needed by the
+   installs the current measured lower-bound runtime ranges and the test dependencies needed by the
    suite.
 2. Run the Ubuntu quality gate with Python 3.12:
 
@@ -70,6 +80,13 @@ local Windows/Linux evidence is recorded in `docs/v0.6-dependency-probe.md`.
    secret/absolute-path scan, license review, and sdist/wheel content inspection. Publish when the
    version in `pyproject.toml`, the installed wheel, the Git tag/release, and PyPI agree in a fresh
    environment.
+7. Check the installed wheel in a real browser: custom schema upload, data upload, validation,
+   conversion, report generation, download, selection changes, and visible output-conflict recovery.
+   Confirm pending-persistence notices and interrupted-output recovery remain accessible. Inspect
+   the offline HTML report at desktop and narrow widths and in print: overview counts, numeric
+   precision, unknown units, statistics tables, provenance summaries, and expandable full metadata.
+   Keep JSON/Markdown report contracts and the source data unchanged. Local browser evidence does
+   not replace the cross-platform CI matrix or establish physical validity.
 
 Review schema changes as public API. Backward-compatible additions may remain in 1.x. Changes to
 meaning, units, requiredness, or conventions require a new schema version. Security reports follow

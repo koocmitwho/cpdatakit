@@ -16,10 +16,10 @@ export function showSliceResult(result, project) {
   if (!artifactId) return;
   const url = `/api/projects/${project.project.id}/artifacts/${artifactId}`;
   const value = result.value;
-  const positions = Object.entries(value.slice).map(([name, p]) => `${name}[${p.index}] = ${p.value ?? 'coordinate unavailable'} ${p.unit || ''}`).join('; ');
+  const positions = Object.entries(value.slice).map(([name, p]) => `${name}[${p.index}] = ${p.value ?? '无坐标值'} ${p.unit || ''}`).join('; ');
   document.querySelector('#slice-image').src = url;
-  document.querySelector('#slice-image').alt = `${value.variable} heatmap, ${positions}`;
-  document.querySelector('#slice-caption').textContent = `${value.variable} [${value.unit || 'unit unknown'}] · ${positions} · ${value.shape.join(' × ')} · ${value.cmap}`;
+  document.querySelector('#slice-image').alt = `${value.variable} 热图，${positions}`;
+  document.querySelector('#slice-caption').textContent = `${value.variable} [${value.unit || '单位未声明'}] · ${positions} · ${value.shape.join(' × ')} · ${value.cmap}`;
   document.querySelector('#slice-download').href = `${url}?download=true`;
   document.querySelector('#slice-preview').hidden = false;
 }
@@ -44,12 +44,12 @@ export function setupFields({request, showResult, followJob}) {
       const label = document.createElement('label');
       const input = document.createElement('input');
       input.id = `index-${indices.children.length}`; label.htmlFor = input.id;
-      label.textContent = `${name} index (0–${fieldStructure.dimensions[name] - 1})`;
+      label.textContent = `${name} 索引（0–${fieldStructure.dimensions[name] - 1}）`;
       input.type = 'number'; input.min = '0'; input.max = fieldStructure.dimensions[name] - 1;
       input.step = '1'; input.required = true; input.value = previous[name] || '0'; input.dataset.dimension = name;
       wrapper.append(label, input); indices.append(wrapper);
     }
-    status.textContent = `${field.name} [${field.unit || 'unit unknown'}] · ${field.dims.map(name => `${name}=${fieldStructure.dimensions[name]}`).join(', ')}`;
+    status.textContent = `${field.name} [${field.unit || '单位未声明'}] · ${field.dims.map(name => `${name}=${fieldStructure.dimensions[name]}`).join(', ')}`;
   }
   function chooseVariable() {
     const dims = fieldStructure.fields.find(item => item.name === variable.value).dims;
@@ -62,7 +62,7 @@ export function setupFields({request, showResult, followJob}) {
       const result = await request(`/api/projects/${project}/datasets/${dataset.value}/structure`);
       fieldStructure = result.value; loadedDataset = dataset.value;
       const fields = fieldStructure.fields.filter(item => item.kind === 'variable' && item.dims.length >= 2);
-      if (!fields.length) { status.textContent = 'This dataset has no variable with two or more dimensions.'; return; }
+      if (!fields.length) { status.textContent = '当前数据没有二维或更高维度的变量。'; return; }
       options(variable, fields.map(item => item.name), fields.find(item => item.name === 'temperature')?.name || fields[0].name);
       chooseVariable(); form.hidden = false;
     } catch (error) { status.textContent = error.message; }
@@ -73,7 +73,7 @@ export function setupFields({request, showResult, followJob}) {
   function changed() {
     if (loadedDataset !== dataset.value) {
       form.hidden = true; document.querySelector('#slice-preview').hidden = true;
-      status.textContent = 'Load controls for the selected dataset.';
+      status.textContent = '数据已切换，请重新读取字段与维度。';
     }
   }
   dataset.addEventListener('change', changed);
@@ -86,7 +86,7 @@ export function setupFields({request, showResult, followJob}) {
       payload.set('indices', JSON.stringify(Object.fromEntries([...indices.querySelectorAll('input')].map(input => [input.dataset.dimension, Number(input.value)]))));
       const result = await request(`/api/projects/${project}/slice`, payload);
       void followJob(result.job_id);
-    } catch (error) { showResult('Heatmap failed', error.payload || {error: {message: error.message}}); }
+    } catch (error) { showResult('热图生成失败', error.payload || {error: {message: error.message}}); }
     finally { button.disabled = false; }
   });
 }

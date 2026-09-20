@@ -13,7 +13,7 @@ from .._atomic import publish_directory
 from ..data import ScientificDataset
 from ..exceptions import DataReadError, DataValidationError, OutputExistsError
 from ._metadata import scientific_for_write, scientific_metadata
-from ._selection import describe_xarray, materialize, select_xarray
+from ._selection import describe_xarray, materialize_cf_selection
 from .base import CapabilityResult, DetectionResult, ReaderInfo, ReadLimits, Selection, WriterInfo
 
 
@@ -38,8 +38,19 @@ def _check_path(path: Path) -> None:
         raise DataReadError(f"Zarr input is not a directory: {path}")
 
 
-def _store_bytes(path: Path) -> int:
-    return sum(item.stat().st_size for item in path.rglob("*") if item.is_file())
+def _store_inventory(path: Path, limits: ReadLimits) -> int:
+    """Count files and enforce the byte/link boundary in one bounded traversal."""
+    size = 0
+    entries = 0
+    for item in path.rglob("*"):
+        if item.is_symlink():
+            raise DataReadError("Dataset directories must not contain symbolic links")
+        if item.is_file():
+            entries += 1
+            size += item.stat().st_size
+            if size > limits.max_bytes:
+                raise DataReadError("Zarr input exceeds the configured byte limit")
+    return entries
 
 
 def _metadata(dataset: Any) -> dict[str, Any]:
@@ -66,12 +77,18 @@ class ZarrReader:
     def inspect(self, path: Path, *, limits: ReadLimits) -> dict[str, Any]:
         input_path = Path(path)
         _check_path(input_path)
-        if _store_bytes(input_path) > limits.max_bytes:
-            raise DataReadError("Zarr input exceeds the configured byte limit")
+        entries = _store_inventory(input_path, limits)
         xarray = _xarray()
         _zarr()
         try:
-            with xarray.open_zarr(input_path, consolidated=False, chunks=None) as dataset:
+            with xarray.open_zarr(
+                input_path,
+                consolidated=False,
+                chunks=None,
+                create_default_indexes=False,
+                decode_times=False,
+                mask_and_scale=False,
+            ) as dataset:
                 data_variables = tuple(dataset.data_vars)
                 record_count = (
                     int(dataset[data_variables[0]].sizes[dataset[data_variables[0]].dims[0]])
@@ -84,9 +101,9 @@ class ZarrReader:
                     "format": "Zarr 3",
                     "dimensions": {name: int(length) for name, length in dataset.sizes.items()},
                     "variables": list(dataset.variables),
-                    "field_details": describe_xarray(dataset),
+                    "field_details": describe_xarray(dataset, decode_cf=True),
                     "record_count": record_count,
-                    "store_entries": sum(1 for item in input_path.rglob("*") if item.is_file()),
+                    "store_entries": entries,
                 }
         except DataReadError:
             raise
@@ -101,8 +118,15 @@ class ZarrReader:
         xarray = _xarray()
         _zarr()
         try:
-            with xarray.open_zarr(input_path, consolidated=False, chunks=None) as opened:
-                dataset = materialize(select_xarray(opened, selection, label="Zarr"), context)
+            with xarray.open_zarr(
+                input_path,
+                consolidated=False,
+                chunks=None,
+                create_default_indexes=False,
+                decode_times=False,
+                mask_and_scale=False,
+            ) as opened:
+                dataset = materialize_cf_selection(opened, selection, label="Zarr", context=context)
             metadata = _metadata(dataset)
             return ScientificDataset(dataset, metadata, input_path)
         except DataReadError:

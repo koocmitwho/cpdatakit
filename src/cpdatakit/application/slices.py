@@ -14,6 +14,7 @@ import numpy as np
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 
+from .._atomic import cleanup_staged_file, publish_file
 from ..exceptions import DataValidationError, OutputExistsError
 from ..formats import ReadLimits, Selection
 from .data_access import inspect_input, load_value
@@ -195,9 +196,7 @@ def plot_scientific_slice(request: SliceRequest, *, context=None):
             )
             if context is not None:
                 context.checkpoint("write slice")
-            if target.exists() and not request.force:
-                raise OutputExistsError(f"Output already exists: {target}")
-            os.replace(temporary, target)
+            publish_file(temporary, target, force=request.force)
         artifact = _relative_artifact(target, request.workspace)
         return ServiceResult(
             "plot_scientific_slice", "succeeded", metadata, artifact=artifact, provenance=provenance
@@ -206,4 +205,4 @@ def plot_scientific_slice(request: SliceRequest, *, context=None):
         return _failure("plot_scientific_slice", exc, provenance=provenance)
     finally:
         if temporary is not None:
-            temporary.unlink(missing_ok=True)
+            cleanup_staged_file(temporary)

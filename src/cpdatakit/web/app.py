@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import html
 import os
 import secrets
 import tempfile
 import threading
 from collections import deque
-from contextlib import suppress
+from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Final
@@ -37,11 +38,14 @@ from ..catalog.sqlite import ArtifactRecord
 from ..exceptions import CatalogError, CPDataKitError, JobError, OutputExistsError, SchemaError
 from ..jobs import JobManager
 from ..jobs.manager import CommittedResult, JobCancelled, JobFailure
-from ..provenance import sha256_file
 from .artifacts import register_snapshot
 from .authoring import install_authoring, store_mapping
 from .operations import install_output_operations
+from .ownership import OwnershipMiddleware, RequestDrain, WorkspaceOwnership
+from .persistence import TERMINAL, JobPersistence
+from .recovery import install_recovery
 from .slices import install_slices
+from .uploads import UploadPublication, upload_failure
 from .workbench import install_workbench, select_schema
 
 _SESSION_COOKIE: Final = "cpdatakit_session"
@@ -202,6 +206,43 @@ def create_app(
     """Create the local UI application rooted at one explicit workspace."""
 
     workspace_path = Path(workspace).expanduser().resolve(strict=False)
+    ownership = WorkspaceOwnership(workspace_path)
+    resources = []
+    try:
+        return _create_owned_app(
+            workspace_path,
+            ownership,
+            resources,
+            max_upload_bytes=max_upload_bytes,
+            max_preview_bytes=max_preview_bytes,
+            max_pending_jobs=max_pending_jobs,
+            max_retained_jobs=max_retained_jobs,
+            max_log_entries=max_log_entries,
+            max_log_entry_chars=max_log_entry_chars,
+        )
+    except BaseException:
+        try:
+            for close in reversed(resources):
+                close()
+        finally:
+            ownership.close()
+        raise
+
+
+def _create_owned_app(
+    workspace,
+    ownership,
+    resources,
+    *,
+    max_upload_bytes,
+    max_preview_bytes,
+    max_pending_jobs,
+    max_retained_jobs,
+    max_log_entries,
+    max_log_entry_chars,
+):
+
+    workspace_path = Path(workspace).expanduser().resolve(strict=False)
     workspace_path.mkdir(parents=True, exist_ok=True)
     upload_limit = _positive_int(max_upload_bytes, "max_upload_bytes")
     preview_limit = _positive_int(max_preview_bytes, "max_preview_bytes")
@@ -216,15 +257,27 @@ def create_app(
         max_log_entries=log_limit,
         max_log_entry_chars=log_chars,
     )
+    resources.append(jobs.shutdown)
+    request_drain = RequestDrain(lambda: not jobs.closed)
+    jobs.add_shutdown_callback(request_drain.close, can_wait=request_drain.can_wait)
     completed_jobs = deque()
     completed_ids: set[str] = set()
     admission_lock = threading.Lock()
     job_projects: dict[str, int] = {}
-    catalog_job_lock = threading.Lock()
+    catalog_job_lock = threading.RLock()
     session_token = secrets.token_urlsafe(32)
     csrf_token = secrets.token_urlsafe(32)
 
-    app = FastAPI(title="CPDataKit local workbench", docs_url=None, redoc_url=None)
+    @asynccontextmanager
+    async def lifespan(app):
+        try:
+            yield
+        finally:
+            await asyncio.to_thread(jobs.shutdown)
+
+    app = FastAPI(
+        title="CPDataKit local workbench", docs_url=None, redoc_url=None, lifespan=lifespan
+    )
     templates = Jinja2Templates(directory=str(Path(__file__).with_name("templates")))
     app.mount(
         "/static",
@@ -236,9 +289,38 @@ def create_app(
     app.state.workspace = workspace_path
     app.state.upload_limit = upload_limit
     app.state.preview_limit = preview_limit
+    app.state.close = jobs.shutdown
+
+    def project_job_summaries(project_id: int) -> dict[str, dict[str, object]]:
+        # The manager is bounded by admission/retention limits. Never infer current
+        # activity from persisted running records left by another app instance.
+        with catalog_job_lock:
+            live = {
+                record.id: {
+                    **_job_summary(record),
+                    "active": record.status.value in {"queued", "running"},
+                    "persistence": persistence.status(record.id),
+                }
+                for record in jobs.list()
+                if job_projects.get(record.id) == project_id
+            }
+            for identifier, entry in persistence.pending.items():
+                if entry["project_id"] == project_id and identifier not in live:
+                    live[identifier] = {
+                        **_job_summary(persistence.record(identifier)),
+                        "active": False,
+                        "persistence": persistence.status(identifier),
+                    }
+            return live
+
+    app.state.project_job_summaries = project_job_summaries
 
     @app.middleware("http")
     async def local_host_guard(request: Request, call_next):
+        if jobs.closed:
+            return _json_error(
+                503, "workbench_closed", "This workbench is closed.", "Start a new workbench."
+            )
         host = _host_name(request.headers.get("host", ""))
         if host not in _LOCAL_HOSTS:
             return _json_error(
@@ -323,7 +405,10 @@ def create_app(
 
         try:
             with admission_lock:
-                if len(jobs.list()) >= retained_limit + pending_limit:
+                live_ids = {record.id for record in jobs.list()}
+                with catalog_job_lock:
+                    retained_count = len(live_ids | persistence.pending.keys())
+                if retained_count >= retained_limit + pending_limit:
                     raise JobError("Job history must be synchronized before accepting more work")
                 handle = jobs.submit(
                     operation,
@@ -392,6 +477,11 @@ def create_app(
                 return
             try:
                 current = jobs.get(record.id)
+                if current.id in completed_ids:
+                    return
+                if current.status.value in TERMINAL:
+                    persistence.save(_job_payload(current), job_projects[current.id])
+                    return
                 catalog.update_job(
                     current.id,
                     status=current.status.value,
@@ -403,16 +493,36 @@ def create_app(
                 )
             except (JobError, CatalogError):
                 return
-            if current.status.value in {"succeeded", "failed", "cancelled"}:
-                if current.id not in completed_ids:
-                    completed_jobs.append(current.id)
-                    completed_ids.add(current.id)
-                while len(completed_jobs) > retained_limit:
-                    retired = completed_jobs.popleft()
-                    completed_ids.remove(retired)
-                    with suppress(JobError):
-                        jobs.discard(retired)
-                    job_projects.pop(retired, None)
+
+    def saved_job(job_id):
+        if job_id not in job_projects:
+            return
+        if job_id not in completed_ids:
+            completed_jobs.append(job_id)
+            completed_ids.add(job_id)
+        while len(completed_jobs) > retained_limit:
+            retired = completed_jobs.popleft()
+            completed_ids.remove(retired)
+            with suppress(JobError):
+                jobs.discard(retired)
+            job_projects.pop(retired, None)
+
+    persistence = JobPersistence(workspace_path, catalog, catalog_job_lock, saved_job)
+    app.state.persistence = persistence
+
+    def close_persistence():
+        try:
+            persistence.close()
+        finally:
+            # Request and job writers have already stopped. A failed final
+            # catalog flush must not strand ownership after the retry writer
+            # has also drained; unknown earlier close failures retain the lock.
+            if persistence.drained:
+                ownership.close()
+
+    jobs.add_shutdown_callback(close_persistence)
+    persistence.replay()
+    install_recovery(app, require_csrf=require_csrf, csrf_token=csrf_token)
 
     def artifact_registration(
         project_id: int,
@@ -461,6 +571,10 @@ def create_app(
     ) -> Response:
         try:
             project = catalog.get_project(project_id)
+            # Snapshot workers first: a completion during the following history
+            # query remains visible until the client observes its terminal status.
+            live_jobs = project_job_summaries(project_id)
+            active_jobs = [item for item in live_jobs.values() if item["active"]]
             page = {"limit": limit, "offset": offset, "newest_first": newest_first}
             datasets = catalog.list_datasets(project_id, **page)
             artifacts = catalog.list_artifacts(project_id, **page)
@@ -514,9 +628,12 @@ def create_app(
                 for item in schemas
             ],
             "jobs": [
-                _job_summary(item) if limit is not None else _job_payload(item)
+                live_jobs.get(item.id, {**_job_summary(item), "active": False})
+                if limit is not None
+                else _job_payload(item)
                 for item in project_jobs
             ],
+            "active_jobs": active_jobs,
         }
         if limit is not None:
             resources = {
@@ -582,6 +699,7 @@ def create_app(
                 "Choose a bundled profile or upload a project schema.",
             )
         temporary_path: Path | None = None
+        publication = None
         try:
             catalog.get_project(project_id)
             upload_name = _safe_upload_name(file.filename)
@@ -627,8 +745,13 @@ def create_app(
                     temporary.write(chunk)
                 temporary.flush()
                 os.fsync(temporary.fileno())
+            publication = UploadPublication(temporary_path, upload_path, workspace_path)
             publish_file(temporary_path, upload_path)
+            publication.published = True
+            publication.verify()
         except CatalogError:
+            if publication is not None and publication.published:
+                return upload_failure(publication)
             return _json_error(
                 404,
                 "project_not_found",
@@ -663,35 +786,24 @@ def create_app(
             )
         )
         if not result.ok:
-            upload_path.unlink(missing_ok=True)
+            recovery = publication.rollback()
+            if recovery:
+                payload = result.to_dict()
+                payload["recovery"] = recovery
+                return JSONResponse(payload, status_code=400)
             status_code = (
                 413 if result.error and result.error.code == "read_limit_exceeded" else 400
             )
             response = JSONResponse(result.to_dict(), status_code=status_code)
             return _set_session_cookie(response, session_token)
         try:
-            dataset_record = catalog.register_dataset(
+            dataset_record = publication.register(
+                catalog,
                 project_id,
-                upload_path,
-                sha256=sha256_file(upload_path),
                 metadata={"schema": schema_name, "operation": "import_and_inspect"},
             )
-        except (CatalogError, OSError):
-            try:
-                upload_path.unlink(missing_ok=True)
-            except OSError:
-                return _json_error(
-                    500,
-                    "upload_cleanup_failed",
-                    "The upload could not be registered or removed.",
-                    "Inspect the project upload before retrying.",
-                )
-            return _json_error(
-                500,
-                "catalog_registration_failed",
-                "The upload could not be registered in the local catalog.",
-                "Retry the upload after checking the catalog.",
-            )
+        except (CPDataKitError, OSError):
+            return upload_failure(publication)
         response = JSONResponse({**result.to_dict(), "dataset_id": dataset_record.id})
         return _set_session_cookie(response, session_token)
 
@@ -731,6 +843,9 @@ def create_app(
         return _set_session_cookie(response, session_token)
 
     def stored_job(job_id):
+        pending = persistence.record(job_id)
+        if pending is not None:
+            return pending
         record = catalog.get_job(job_id)
         if record.status in {"running", "queued"}:
             record = catalog.update_job(
@@ -758,7 +873,10 @@ def create_app(
                 "The requested job does not exist.",
                 "Refresh the project and choose a known job.",
             )
-        return _set_session_cookie(JSONResponse(_job_payload(record)), session_token)
+        return _set_session_cookie(
+            JSONResponse({**_job_payload(record), "persistence": persistence.status(job_id)}),
+            session_token,
+        )
 
     @app.post("/api/jobs/{job_id}/cancel")
     def cancel_job(
@@ -817,6 +935,7 @@ def create_app(
         session_token=session_token,
         require_csrf=require_csrf,
     )
+    app.add_middleware(OwnershipMiddleware, drain=request_drain)
     return app
 
 

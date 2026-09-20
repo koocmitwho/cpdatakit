@@ -259,12 +259,15 @@ def _run_ui(args: argparse.Namespace) -> int:
 
     port = args.port or _available_port(args.host)
     app = create_app(args.workspace)
-    display_host = f"[{args.host}]" if ":" in args.host else args.host
-    url = f"http://{display_host}:{port}"
-    print(url)
-    if not args.no_browser:
-        webbrowser.open(url)
-    uvicorn.run(app, host=args.host, port=port, log_level="debug" if args.debug else "info")
+    try:
+        display_host = f"[{args.host}]" if ":" in args.host else args.host
+        url = f"http://{display_host}:{port}"
+        print(url)
+        if not args.no_browser:
+            webbrowser.open(url)
+        uvicorn.run(app, host=args.host, port=port, log_level="debug" if args.debug else "info")
+    finally:
+        app.state.close()
     return 0
 
 

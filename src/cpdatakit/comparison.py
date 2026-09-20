@@ -15,6 +15,7 @@ from typing import Any
 
 from ._atomic import publish_directory, publish_file
 from ._comparison_v2 import compare_scientific_statistics
+from ._numeric_summary import finite_difference, numeric_equal
 from .exceptions import CPDataKitError, OutputExistsError
 from .inspection import sanitize_for_output
 from .reporting import render_report_json
@@ -127,16 +128,23 @@ def _compare_statistics(
                 )
                 continue
             if _finite_number(left_value) and _finite_number(right_value):
-                if left_value != right_value:
-                    changed.append(
-                        {
-                            "field": field,
-                            "metric": metric,
-                            "left": _safe_value(left_value),
-                            "right": _safe_value(right_value),
-                            "delta": right_value - left_value,
-                        }
-                    )
+                if not numeric_equal(left_value, right_value):
+                    item = {
+                        "field": field,
+                        "metric": metric,
+                        "left": _safe_value(left_value),
+                        "right": _safe_value(right_value),
+                    }
+                    delta = finite_difference(left_value, right_value)
+                    if _finite_number(delta):
+                        changed.append({**item, "delta": delta})
+                    else:
+                        unavailable.append(
+                            {
+                                **item,
+                                "reason": "Difference cannot be represented as a finite number",
+                            }
+                        )
             elif _safe_value(left_value) != _safe_value(right_value):
                 unavailable.append(
                     {

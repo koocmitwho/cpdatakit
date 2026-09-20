@@ -13,6 +13,7 @@ from test_web_workflows import _csrf, _request, _seed_curve
 
 from cpdatakit.formats import ZarrWriter
 from cpdatakit.web import authoring, create_app, slices, workbench
+from cpdatakit.web import uploads as upload_operations
 from cpdatakit.web.artifacts import register_snapshot
 
 pytest_plugins = ["test_application_multiformat"]
@@ -155,18 +156,20 @@ def test_zarr_upload_io_leaves_the_event_loop_available(
         if operation == "inspect":
             gate.install(monkeypatch, workbench, "import_and_inspect")
         elif operation == "hash":
-            gate.install(monkeypatch, workbench, "path_sha256", lambda path: path.suffix == ".zarr")
+            gate.install(
+                monkeypatch, upload_operations, "path_sha256", lambda path: path.suffix == ".zarr"
+            )
         elif operation == "promote":
             gate.install(
                 monkeypatch,
-                workbench.os,
-                "replace",
+                workbench,
+                "publish_directory",
                 lambda source, target: Path(source).suffix == ".zarr",
             )
         elif operation == "register":
             gate.install(monkeypatch, app.state.catalog, "register_dataset")
         else:
-            gate.install(monkeypatch, workbench.shutil, "rmtree")
+            gate.install(monkeypatch, upload_operations.shutil, "rmtree")
 
         response = asyncio.run(
             _request_while_health_remains_available(

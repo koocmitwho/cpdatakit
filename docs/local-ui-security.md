@@ -38,6 +38,21 @@ Path containment is checked after resolving every path.
 - Store source bytes by reference or copy according to the project setting. Catalog removal does not
   remove source files unless the user selects a separate file-removal action.
 
+Single-file and Zarr uploads bind catalog registration to the identity and content digest captured
+from their private staging output. Registration checks the public target before and after the
+catalog write. Failed uploads remove only a matching item: rollback first moves it into a random
+private quarantine, then checks identity and content again. A replacement or modification in that
+interval is retained in quarantine with a workspace-relative recovery record. A newly occupied
+public name is preserved. Inspect the response's `recovery` locations before retrying; restore a
+retained item only to an unused destination. If writing a recovery record itself fails, the response
+sets `record_written` to false and supplies the available locations.
+
+The random staging and quarantine directories are trusted private paths for this operation. This
+protocol does not implement atomic compare-and-delete, and does not cover another same-permission
+process actively scanning and modifying private paths or continuing to write through a retained
+handle after quarantine. Failed cleanup of private staging after successful registration is logged;
+it does not turn the completed upload into a failed operation.
+
 ## Jobs and cancellation
 
 Job cancellation is cooperative and must leave the workspace in a readable state.
@@ -50,6 +65,12 @@ The workbench admits a job only after its catalog row exists. Failed admission c
 and releases its gate. Completed results are persisted before memory retirement. Default limits
 are 64 pending jobs, 256 retained completed jobs, and 256 progress entries of 512 characters.
 Historical details remain in the catalog and are loaded on demand.
+
+Project pages and the project API include a separate, bounded `active_jobs` summary for workers
+owned by this app instance. History retains its existing pagination and counts; rows are deduplicated
+by ID in the browser. A persisted `running` row from a previous instance offers details rather than
+live cancellation or automatic polling. Unpaginated API clients still receive the complete history
+and result payloads.
 
 ## SQLite catalog
 

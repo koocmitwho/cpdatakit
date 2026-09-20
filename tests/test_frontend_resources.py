@@ -18,6 +18,17 @@ import pytest
         "stale-page",
         "schema-selection",
         "slice-legacy",
+        "active-history",
+        "terminal-refresh-race",
+        "stale-running",
+        "pending-persistence",
+        "validation-context",
+        "validation-history",
+        "output-conflict",
+        "artifact-actions",
+        "authoring-context",
+        "authoring-save",
+        "mapping-scope",
     ],
 )
 def test_frontend_resource_behavior(behavior):

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ project.name }} · CPDataKit</title>
@@ -9,132 +9,143 @@
 </head>
 <body data-project-id="{{ project.id }}">
   <script id="project-resources" type="application/json">{{ resource_state|tojson }}</script>
-  <header class="topbar"><a href="/">CPDataKit</a><span>LOCAL WORKBENCH</span></header>
-  <main>
-    <a class="back" href="/">← All projects</a><h1>{{ project.name }}</h1>
-    <p class="lead">Validate uploaded data and download converted files or reports.</p>
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <div class="workflow-grid">
-      <section>
-        <h2><span class="step">1</span> Choose a schema</h2>
-        <label for="schema">Schema for this workflow</label>
-        <select id="schema" name="schema">
-          <optgroup label="Bundled · schema 1.0"><option value="curve">Curve</option><option value="point">Point</option><option value="field2d">2D field</option></optgroup>
-          <optgroup label="Project schemas">
-            {% for schema in schemas %}<option value="schema:{{ schema.id }}" {% if loop.first %}selected{% endif %}>{{ schema.name }} · {{ schema.version }} · #{{ schema.id }}</option>{% endfor %}
-          </optgroup>
-        </select>
-        <p class="hint" data-resource-count="schemas">Showing {{ schemas|length }} of {{ resource_state.pagination.counts.schemas }} project schemas</p>
-        <button type="button" class="secondary" data-load-more="schemas" {% if not resource_state.pagination.has_more.schemas %}hidden{% endif %}>Load older schemas</button>
-        <p class="hint">Use schema 1.0 for tables and schema 2.0 for multidimensional data.</p>
-        <details><summary>Add a custom schema</summary>
-          <form data-operation="schema" action="/api/projects/{{ project.id }}/schemas" method="post" enctype="multipart/form-data">
-            <label for="schema-file">Schema JSON file</label><input id="schema-file" type="file" name="file" accept=".json" required>
-            <p class="hint">Upload standalone JSON. For includes or extends, resolve the schema in Python first.</p>
-            <button type="submit" class="secondary">Add schema</button>
-          </form>
+  <header class="topbar"><a class="brand" href="/">CP<span>DataKit</span></a><span class="local-indicator">本地工作台 · 文件保存在这台电脑</span></header>
+  <div class="workspace-layout">
+    <aside class="workspace-nav" aria-label="工作流程导航">
+      <a class="back" href="/">← 全部项目</a>
+      <p class="eyebrow">工作流程</p>
+      <nav>
+        <a href="#prepare"><span class="nav-number">01</span><span>准备数据<small>文件与数据规则</small></span></a>
+        <a href="#check"><span class="nav-number">02</span><span>检查与处理<small>校验、报告、转换</small></span></a>
+        <a href="#results"><span class="nav-number">03</span><span>查看结果<small>文件与任务记录</small></span></a>
+      </nav>
+      <p class="nav-note">先检查一份数据，再生成可保存、可分享的结果。</p>
+    </aside>
+    <main class="workspace-main">
+      <div class="page-heading"><div><p class="eyebrow">科研数据工作台</p><h1>{{ project.name }}</h1><p class="lead">确认字段和单位，检查数据，再查看或导出结果。</p></div><span class="status-badge">本地项目</span></div>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="context-bar" aria-label="当前处理对象">
+        <div><span class="context-label">当前数据</span><strong id="current-dataset">{% if datasets %}{{ datasets[0].relative_path.split('/')[-1] }}{% else %}尚未上传{% endif %}</strong></div>
+        <div><span class="context-label">数据规则</span><strong id="current-schema">{% if schemas %}{{ schemas[0].name }}{% else %}曲线 · Curve{% endif %}</strong></div>
+        <div><span class="context-label">下一步</span><strong id="workflow-status" role="status">选择数据后运行校验</strong></div>
+      </div>
+      <section id="prepare" class="panel">
+        <div class="section-heading"><div><p class="eyebrow">步骤 01</p><h2>准备数据与规则</h2></div><span class="hint">支持表格与多维数组</span></div>
+        <div class="workflow-grid">
+          <div class="input-panel">
+            <label for="schema">数据规则（Schema）</label>
+            <p class="hint">规则声明需要哪些字段，以及它们的单位、类型和维度。</p>
+            <select id="schema" name="schema">
+              <optgroup label="内置规则 · schema 1.0"><option value="curve">曲线 · Curve</option><option value="point">采样点 · Point</option><option value="field2d">二维场 · 2D field</option></optgroup>
+              <optgroup label="项目规则">
+                {% for schema in schemas %}<option value="schema:{{ schema.id }}" {% if loop.first %}selected{% endif %}>{{ schema.name }} · {{ schema.version }} · #{{ schema.id }}</option>{% endfor %}
+              </optgroup>
+            </select>
+            <p class="hint" data-resource-count="schemas">已显示 {{ schemas|length }} / {{ resource_state.pagination.counts.schemas }} 份项目规则</p>
+            <button type="button" class="secondary" data-load-more="schemas" {% if not resource_state.pagination.has_more.schemas %}hidden{% endif %}>加载更早规则</button>
+            <details class="disclosure"><summary>添加自定义规则</summary>
+              <form data-operation="schema" action="/api/projects/{{ project.id }}/schemas" method="post" enctype="multipart/form-data">
+                <label for="schema-file">规则 JSON 文件</label><input id="schema-file" type="file" name="file" accept=".json" required>
+                <p class="hint">表格使用 schema 1.0，多维数组使用 2.0。含 includes / extends 的规则请先在 Python 中解析。</p>
+                <button type="submit" class="secondary">添加数据规则</button>
+              </form>
+            </details>
+          </div>
+          <div class="input-panel">
+            <form data-operation="upload" action="/api/projects/{{ project.id }}/inspect" method="post" enctype="multipart/form-data">
+              <label for="data-file">上传数据文件</label>
+              <p class="hint">上传后先查看文件结构，原文件内容保留。</p>
+              <input id="data-file" type="file" name="file" accept=".csv,.json,.nc,.netcdf,.parquet,.h5,.hdf5" required>
+              <p class="hint">CSV、JSON、NetCDF、Parquet 或 CPDataKit HDF5。</p>
+              <button type="submit">上传并检查</button>
+            </form>
+            <details class="disclosure"><summary>上传 Zarr 目录</summary>
+              <form data-operation="zarr" action="/api/projects/{{ project.id }}/inspect-zarr" method="post" enctype="multipart/form-data">
+                <label for="zarr-files">Zarr 数据目录</label><input id="zarr-files" type="file" name="files" webkitdirectory multiple required>
+                <p class="hint">选择一个 .zarr 文件夹，最多包含 1,000 个文件。</p>
+                <button type="submit" class="secondary">上传目录</button>
+              </form>
+            </details>
+          </div>
+        </div>
+        <details id="schema-authoring" class="advanced-panel"><summary>高级设置 · 生成规则草案与预览字段映射</summary>
+          <p class="hint">根据文件生成草案，再核对单位、物理角色和约定。字段映射用于对应列名和显式换算单位。</p>
+          <button id="draft-schema" type="button" class="secondary" data-needs-dataset {% if not datasets %}disabled{% endif %}>从数据生成规则草案</button>
+          <p id="authoring-status" role="status"></p>
+          <div id="draft-editor" hidden>
+            <details><summary>需要确认的声明</summary><ul id="schema-review"></ul></details>
+            <label for="schema-draft-json">编辑规则 JSON</label><textarea id="schema-draft-json" rows="12" spellcheck="false"></textarea>
+            <button id="save-draft" type="button">保存已确认的规则</button>
+          </div>
+          <details><summary>转换时使用的字段映射</summary>
+            <p class="hint">填写字段对应关系和单位换算。多维数据填写 mapping_version: 2.0，并在 dimensions 中声明维度改名。</p>
+            <label for="mapping-json">映射 JSON（可选）</label><textarea id="mapping-json" rows="8" spellcheck="false" placeholder='{"mappings": []}'></textarea>
+            <button id="preview-mapping" type="button" class="secondary" data-needs-dataset {% if not datasets %}disabled{% endif %}>预览映射</button>
+            <p class="hint">预览在读取限额内校验输入，每个字段最多显示 5 个值。映射仅在“转换并保存”时应用。</p>
+            <div id="mapping-preview" class="table-scroll" hidden><table><thead><tr><th>来源字段</th><th>目标字段</th><th>单位</th><th>维度</th><th>转换前 → 转换后</th></tr></thead><tbody></tbody></table></div>
+          </details>
         </details>
       </section>
-      <section>
-        <h2><span class="step">2</span> Upload data</h2>
-        <form data-operation="upload" action="/api/projects/{{ project.id }}/inspect" method="post" enctype="multipart/form-data">
-          <label for="data-file">Data file</label><input id="data-file" type="file" name="file" accept=".csv,.json,.nc,.netcdf,.parquet,.h5,.hdf5" required>
-          <p class="hint">CSV, JSON records, NetCDF, Parquet or CPDataKit HDF5 1.0 / 2.0.</p>
-          <button type="submit">Upload and inspect</button>
-        </form>
-        <details><summary>Upload a Zarr directory</summary>
-          <form data-operation="zarr" action="/api/projects/{{ project.id }}/inspect-zarr" method="post" enctype="multipart/form-data">
-            <label for="zarr-files">Zarr directory</label><input id="zarr-files" type="file" name="files" webkitdirectory multiple required>
-            <p class="hint">Select one .zarr folder containing up to 1,000 files.</p>
-            <button type="submit" class="secondary">Upload directory</button>
+      <section id="check" class="panel">
+        <div class="section-heading"><div><p class="eyebrow">步骤 02</p><h2>检查数据，生成结果</h2></div></div>
+        <div class="check-controls">
+          <div class="grow"><label for="dataset">选择已上传的数据</label><select id="dataset" name="dataset_id" {% if not datasets %}disabled{% endif %}>
+            {% for dataset in datasets %}<option value="{{ dataset.id }}" {% if loop.first %}selected{% endif %}>{{ dataset.relative_path.split('/')[-1] }}</option>{% else %}<option value="">请先上传数据</option>{% endfor %}
+          </select></div>
+          <form data-operation="validate" action="/api/projects/{{ project.id }}/validate" method="post"><button type="submit" data-needs-dataset {% if not datasets %}disabled{% endif %}>校验数据</button></form>
+        </div>
+        <p class="hint" data-resource-count="datasets">已显示 {{ datasets|length }} / {{ resource_state.pagination.counts.datasets }} 份数据</p>
+        <button type="button" class="secondary" data-load-more="datasets" {% if not resource_state.pagination.has_more.datasets %}hidden{% endif %}>加载更早数据</button>
+        <section id="operation-result" class="operation-result" aria-live="polite" aria-atomic="true" hidden><h3 id="result-title">操作结果</h3><div id="result-content"></div></section>
+        <div class="workflow-grid action-grid">
+          <form class="action-card" data-operation="report" action="/api/projects/{{ project.id }}/report" method="post">
+            <span class="eyebrow">检查与分享</span><h3>生成数据报告</h3><p class="hint">报告检查当前所选的上传文件，包含校验结论、统计和来源。</p>
+            <label for="report-format">报告格式</label><select id="report-format" name="format"><option value="html">HTML · 浏览器查看</option><option value="markdown">Markdown · 文本</option><option value="json">JSON · 程序读取</option></select>
+            <label for="report-output">报告保存路径</label><input id="report-output" name="output" value="results/report.html" aria-describedby="output-feedback-report" required>
+            <p id="output-feedback-report" class="hint" role="status">保存到本项目内，可修改文件名。</p>
+            <label class="check"><input type="checkbox" name="force" value="true"> 我确认替换同名报告</label>
+            <button type="submit" data-needs-dataset {% if not datasets %}disabled{% endif %}>生成报告</button>
           </form>
+          <form class="action-card" data-operation="convert" action="/api/projects/{{ project.id }}/convert" method="post">
+            <span class="eyebrow">整理与导出</span><h3>转换数据格式</h3><p class="hint">按当前规则写出新文件，并应用已填写的字段映射。</p>
+            <label for="output-format">输出格式</label><select id="output-format" name="output_format"><option value="hdf5">HDF5 · 根据数据选择布局</option><option value="netcdf">NetCDF · 多维数组</option><option value="zarr">Zarr 3 · 多维数组</option><option value="parquet">Parquet · 表格</option></select>
+            <label for="convert-output">数据保存路径</label><input id="convert-output" name="output" value="results/converted.h5" aria-describedby="output-feedback-convert" required>
+            <p id="output-feedback-convert" class="hint" role="status">生成的文件在下方结果区查看。</p>
+            <label class="check"><input type="checkbox" name="force" value="true"> 我确认替换同名数据文件</label>
+            <button type="submit" class="secondary" data-needs-dataset {% if not datasets %}disabled{% endif %}>转换并保存</button>
+          </form>
+        </div>
+        <details id="field-viewer" class="advanced-panel"><summary>高级查看 · 多维数据的二维切片</summary>
+          <p class="hint">适用于具有两个或更多维度的数值变量。选择两个轴，其余维度固定到指定索引。一维曲线不使用此工具。</p>
+          <button id="load-field" type="button" class="secondary" data-needs-dataset {% if not datasets %}disabled{% endif %}>读取可用变量</button>
+          <p id="field-status" role="status"></p>
+          <form id="slice-form" hidden>
+            <label for="field-variable">变量</label><select id="field-variable" name="variable"></select>
+            <div class="workflow-grid"><div><label for="field-x">水平轴</label><select id="field-x" name="x"></select></div><div><label for="field-y">垂直轴</label><select id="field-y" name="y"></select></div></div>
+            <div id="slice-indices" class="workflow-grid"></div>
+            <div class="workflow-grid"><div><label for="color-min">色标下限</label><input id="color-min" name="vmin" type="number" step="any" placeholder="自动"></div><div><label for="color-max">色标上限</label><input id="color-max" name="vmax" type="number" step="any" placeholder="自动"></div></div>
+            <label for="color-map">配色</label><select id="color-map" name="cmap"><option>viridis</option><option>magma</option><option>cividis</option><option>coolwarm</option></select>
+            <button type="submit">生成切片图</button>
+          </form>
+          <figure id="slice-preview" hidden><img id="slice-image" alt="所选数据平面"><figcaption id="slice-caption"></figcaption><a id="slice-download" download>下载 PNG</a></figure>
         </details>
       </section>
-    </div>
-    <section>
-      <h2><span class="step">3</span> Validate and create results</h2>
-      <label for="dataset">Uploaded dataset</label>
-      <select id="dataset" name="dataset_id" {% if not datasets %}disabled{% endif %}>
-        {% for dataset in datasets %}<option value="{{ dataset.id }}" {% if loop.first %}selected{% endif %}>{{ dataset.relative_path.split('/')[-1] }}</option>
-        {% else %}<option value="">Upload a dataset to continue</option>{% endfor %}
-      </select>
-      <p class="hint" data-resource-count="datasets">Showing {{ datasets|length }} of {{ resource_state.pagination.counts.datasets }} datasets</p>
-      <button type="button" class="secondary" data-load-more="datasets" {% if not resource_state.pagination.has_more.datasets %}hidden{% endif %}>Load older datasets</button>
-      <form data-operation="validate" action="/api/projects/{{ project.id }}/validate" method="post">
-        <button type="submit" data-needs-dataset {% if not datasets %}disabled{% endif %}>Validate dataset</button>
-      </form>
-      <div class="workflow-grid compact">
-        <form data-operation="convert" action="/api/projects/{{ project.id }}/convert" method="post">
-          <h3>Convert data</h3><label for="output-format">Output format</label>
-          <select id="output-format" name="output_format"><option value="hdf5">HDF5 · layout follows the data</option><option value="netcdf">NetCDF · multidimensional</option><option value="zarr">Zarr 3 · multidimensional</option><option value="parquet">Parquet · tabular</option></select>
-          <label for="convert-output">Output path in this project</label><input id="convert-output" name="output" value="results/converted.h5" required>
-          <label class="check"><input type="checkbox" name="force" value="true"> Replace an existing output</label>
-          <button type="submit" data-needs-dataset {% if not datasets %}disabled{% endif %}>Convert dataset</button>
-        </form>
-        <form data-operation="report" action="/api/projects/{{ project.id }}/report" method="post">
-          <h3>Validation report</h3><label for="report-format">Report format</label>
-          <select id="report-format" name="format"><option value="html">HTML · view in browser</option><option value="markdown">Markdown</option><option value="json">JSON</option></select>
-          <label for="report-output">Report path in this project</label><input id="report-output" name="output" value="results/report.html" required>
-          <label class="check"><input type="checkbox" name="force" value="true"> Replace an existing report</label>
-          <button type="submit" data-needs-dataset {% if not datasets %}disabled{% endif %}>Create report</button>
-        </form>
-      </div>
-    </section>
-    <section id="schema-authoring">
-      <h2>Review schema and field mapping</h2>
-      <p class="hint">Build a schema from the file's fields and dimensions. Check units and fill in missing roles before saving.</p>
-      <button id="draft-schema" type="button" class="secondary" data-needs-dataset {% if not datasets %}disabled{% endif %}>Draft schema from dataset</button>
-      <p id="authoring-status" role="status"></p>
-      <div id="draft-editor" hidden>
-        <details><summary>Declarations to review</summary><ul id="schema-review"></ul></details>
-        <label for="schema-draft-json">Editable schema JSON</label><textarea id="schema-draft-json" rows="12" spellcheck="false"></textarea>
-        <button id="save-draft" type="button">Save reviewed schema</button>
-      </div>
-      <details><summary>Field mapping for conversion</summary>
-        <p class="hint">Use the JSON below to rename fields or convert units. For multidimensional data, set mapping_version to 2.0 and put dimension renames in dimensions. Arrays follow the target schema's dimension order.</p>
-        <label for="mapping-json">Mapping JSON (optional)</label><textarea id="mapping-json" rows="8" spellcheck="false" placeholder='{"mappings": []}'></textarea>
-        <button id="preview-mapping" type="button" class="secondary" data-needs-dataset {% if not datasets %}disabled{% endif %}>Preview mapping</button>
-        <p class="hint">Preview checks the full input within the size limits and shows up to five values per field. Click Convert dataset to apply this mapping.</p>
-        <div id="mapping-preview" class="table-scroll" hidden><table><thead><tr><th>Source</th><th>Target</th><th>Units</th><th>Dimensions</th><th>Values before → after</th></tr></thead><tbody></tbody></table></div>
-      </details>
-    </section>
-    <section id="field-viewer">
-      <h2>Explore a multidimensional field</h2>
-      <p class="hint">Choose a variable and two axes, then set the remaining dimensions, such as the time step. The heatmap loads that slice.</p>
-      <button id="load-field" type="button" class="secondary" data-needs-dataset {% if not datasets %}disabled{% endif %}>Load field controls</button>
-      <p id="field-status" role="status"></p>
-      <form id="slice-form" hidden>
-        <label for="field-variable">Variable</label><select id="field-variable" name="variable"></select>
-        <div class="workflow-grid">
-          <div><label for="field-x">Horizontal dimension</label><select id="field-x" name="x"></select></div>
-          <div><label for="field-y">Vertical dimension</label><select id="field-y" name="y"></select></div>
+      <section id="results" class="panel">
+        <div class="section-heading"><div><p class="eyebrow">步骤 03</p><h2>查看与下载结果</h2></div></div>
+        <div id="artifacts">
+          {% for artifact in artifacts %}<p class="artifact-row"><a href="/api/projects/{{ project.id }}/artifacts/{{ artifact.id }}" target="_blank" rel="noopener">{{ artifact.relative_path.split('/')[-1] }}</a><span class="hint">{{ {'report':'报告','convert':'数据转换','plot':'图表','compare':'比较'}.get(artifact.kind, artifact.kind) }}</span><a href="/api/projects/{{ project.id }}/artifacts/{{ artifact.id }}?download=true">下载</a></p>{% else %}<p class="empty-state">还没有结果。完成一次报告或转换后，文件会出现在这里。</p>{% endfor %}
         </div>
-        <div id="slice-indices" class="workflow-grid"></div>
-        <div class="workflow-grid">
-          <div><label for="color-min">Color minimum</label><input id="color-min" name="vmin" type="number" step="any" placeholder="Automatic"></div>
-          <div><label for="color-max">Color maximum</label><input id="color-max" name="vmax" type="number" step="any" placeholder="Automatic"></div>
+        <p class="hint" data-resource-count="artifacts">已显示 {{ artifacts|length }} / {{ resource_state.pagination.counts.artifacts }} 个结果</p>
+        <button type="button" class="secondary" data-load-more="artifacts" {% if not resource_state.pagination.has_more.artifacts %}hidden{% endif %}>加载更早结果</button>
+        <div class="section-heading jobs-heading"><h3>任务记录</h3><a class="hint" href="/projects/{{ project.id }}/recovery">查看中断任务的恢复信息 →</a></div>
+        <div id="jobs">
+          {% for job in visible_jobs %}<p class="job-row" data-job-id="{{ job.id }}" data-job-status="{{ job.status }}">{{ {'report':'生成报告','convert':'转换数据','plot':'生成图表','compare':'比较报告'}.get(job.operation,job.operation) }} · {{ {'succeeded':'已完成','failed':'未完成','running':'处理中','queued':'等待处理','cancelled':'已取消'}.get(job.status,job.status) }} · {{ job.output_filename or '' }} {% if job.persistence is defined and job.persistence.state == 'pending' %}<span class="hint" data-persistence="pending">结果等待保存。</span>{% endif %}{% if not job.active %}<button type="button" class="secondary" data-job-details="{{ job.id }}">查看详情</button>{% else %}<button type="button" class="secondary">取消任务</button>{% endif %}</p>{% else %}<p class="empty-state" id="no-jobs">还没有任务。生成报告或转换数据后，可在此查看进度。</p>{% endfor %}
         </div>
-        <label for="color-map">Color map</label><select id="color-map" name="cmap"><option>viridis</option><option>magma</option><option>cividis</option><option>coolwarm</option></select>
-        <button type="submit">Render heatmap</button>
-      </form>
-      <figure id="slice-preview" hidden><img id="slice-image" alt="Selected scientific data plane"><figcaption id="slice-caption"></figcaption><a id="slice-download" download>Download PNG</a></figure>
-    </section>
-    <section id="operation-result" aria-live="polite" aria-atomic="true" hidden><h2 id="result-title">Result</h2><div id="result-content"></div></section>
-    <section>
-      <h2><span class="step">4</span> View results</h2><div id="artifacts">
-        {% for artifact in artifacts %}<p><a href="/api/projects/{{ project.id }}/artifacts/{{ artifact.id }}" target="_blank" rel="noopener">{{ artifact.relative_path.split('/')[-1] }}</a> <span class="hint">{{ artifact.kind }}</span> · <a href="/api/projects/{{ project.id }}/artifacts/{{ artifact.id }}?download=true">Download</a></p>
-        {% else %}<p class="hint">Converted data and reports will appear here.</p>{% endfor %}
-      </div>
-      <p class="hint" data-resource-count="artifacts">Showing {{ artifacts|length }} of {{ resource_state.pagination.counts.artifacts }} results</p>
-      <button type="button" class="secondary" data-load-more="artifacts" {% if not resource_state.pagination.has_more.artifacts %}hidden{% endif %}>Load older results</button>
-      <h3>Jobs</h3><div id="jobs">
-        {% for job in jobs %}<p data-job-id="{{ job.id }}" data-job-status="{{ job.status }}">{{ job.operation }} · {{ job.status }} · {{ job.output_filename or '' }} {% if job.status in ['succeeded', 'failed', 'cancelled'] %}<button type="button" class="secondary" data-job-details="{{ job.id }}">View details</button>{% endif %}</p>
-        {% else %}<p class="hint" id="no-jobs">No jobs yet.</p>{% endfor %}
-      </div>
-      <p class="hint" data-resource-count="jobs">Showing {{ jobs|length }} of {{ resource_state.pagination.counts.jobs }} jobs</p>
-      <button type="button" class="secondary" data-load-more="jobs" {% if not resource_state.pagination.has_more.jobs %}hidden{% endif %}>Load older jobs</button>
-    </section>
-    <footer>Validation checks the fields, dimensions and units declared in your schema.</footer>
-  </main>
+        <p class="hint" data-resource-count="jobs">已显示 {{ jobs|length }} / {{ resource_state.pagination.counts.jobs }} 个任务</p>
+        <button type="button" class="secondary" data-load-more="jobs" {% if not resource_state.pagination.has_more.jobs %}hidden{% endif %}>加载更早任务</button>
+      </section>
+      <footer>校验依据你声明的字段、单位和维度。物理含义及科学结论仍需结合领域方法判断。</footer>
+    </main>
+  </div>
 </body>
 </html>

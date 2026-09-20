@@ -12,7 +12,7 @@ from .._atomic import cleanup_staged_file, publish_file
 from ..data import ScientificDataset
 from ..exceptions import DataReadError, DataValidationError, OutputExistsError
 from ._metadata import scientific_for_write, scientific_metadata
-from ._selection import describe_xarray, materialize, select_xarray
+from ._selection import describe_xarray, materialize_cf_selection
 from .base import CapabilityResult, DetectionResult, ReaderInfo, ReadLimits, Selection, WriterInfo
 
 _ENGINES = {"h5netcdf": "h5netcdf", "netcdf4": "netCDF4"}
@@ -80,9 +80,14 @@ class NetCDFReader:
         xarray = _xarray()
         _backend(self.engine)
         try:
-            with xarray.open_dataset(input_path, engine=self.engine) as dataset:
+            with xarray.open_dataset(
+                input_path,
+                engine=self.engine,
+                create_default_indexes=False,
+                decode_times=False,
+                mask_and_scale=False,
+            ) as dataset:
                 dimensions = {name: int(length) for name, length in dataset.sizes.items()}
-                variables = describe_xarray(dataset)
                 data_variables = tuple(dataset.data_vars)
                 record_count = (
                     int(dataset[data_variables[0]].sizes[dataset[data_variables[0]].dims[0]])
@@ -95,7 +100,7 @@ class NetCDFReader:
                     "format": "NetCDF",
                     "engine": self.engine,
                     "dimensions": dimensions,
-                    "variables": variables,
+                    "variables": describe_xarray(dataset, decode_cf=True),
                     "record_count": record_count,
                 }
         except DataReadError:
@@ -111,8 +116,16 @@ class NetCDFReader:
         xarray = _xarray()
         _backend(self.engine)
         try:
-            with xarray.open_dataset(input_path, engine=self.engine) as opened:
-                dataset = materialize(select_xarray(opened, selection, label="NetCDF"), context)
+            with xarray.open_dataset(
+                input_path,
+                engine=self.engine,
+                create_default_indexes=False,
+                decode_times=False,
+                mask_and_scale=False,
+            ) as opened:
+                dataset = materialize_cf_selection(
+                    opened, selection, label="NetCDF", context=context
+                )
             metadata = _metadata(dataset, self.engine)
             return ScientificDataset(dataset, metadata, input_path)
         except DataReadError:

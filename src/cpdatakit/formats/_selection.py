@@ -8,9 +8,30 @@ from ._metadata import METADATA_KEY, decode_metadata
 from .base import Selection
 
 
-def describe_xarray(dataset):
+def _inherit_cf_time_bounds(dataset):
+    """Propagate CF time-bound metadata before projecting out a parent field."""
+    for variable in dataset.variables.values():
+        units = variable.attrs.get("units")
+        bounds = variable.attrs.get("bounds")
+        if isinstance(units, str) and "since" in units and bounds in dataset.variables:
+            target = dataset.variables[bounds].attrs
+            for name in ("units", "calendar"):
+                if name in variable.attrs:
+                    target.setdefault(name, variable.attrs[name])
+
+
+def describe_xarray(dataset, *, decode_cf=False):
     metadata = decode_metadata(dataset.attrs.get(METADATA_KEY))
     units = metadata.get("units", {})
+    variables = dataset.variables
+    if decode_cf:
+        _inherit_cf_time_bounds(dataset)
+        # Decode variable metadata without constructing indexes. CF datetime dtype
+        # detection samples endpoints, so callers must check size limits first.
+        variables = {
+            name: xr.conventions.decode_cf_variable(name, var, concat_characters=False)
+            for name, var in variables.items()
+        }
     return {
         name: {
             "dims": list(var.dims),
@@ -20,7 +41,7 @@ def describe_xarray(dataset):
             "role": var.attrs.get("role"),
             "kind": "coordinate" if name in dataset.coords else "variable",
         }
-        for name, var in dataset.variables.items()
+        for name, var in variables.items()
     }
 
 
@@ -62,6 +83,46 @@ def select_xarray(dataset, selection: Selection | None, *, label: str):
     return dataset.isel(indices) if indices else dataset
 
 
+def materialize_cf_selection(dataset, selection, *, label, context=None):
+    """Keep packed values exact and retain CF time types known from axis endpoints.
+
+    Time dtype detection needs bounded samples outside the selected interval. It
+    cannot detect an out-of-range interior date on an arbitrary nonmonotonic axis;
+    the selected values therefore retain automatic decoding unless the endpoints
+    already require cftime. No full coordinate scan is performed.
+    """
+    _inherit_cf_time_bounds(dataset)
+    selected = select_xarray(dataset, selection, label=label)
+    time_coders = {}
+    for name in selected.variables:
+        variable = dataset.variables[name]
+        units = variable.attrs.get("units")
+        if isinstance(units, str) and "since" in units:
+            if context is not None:
+                context.checkpoint(f"inspect time dtype {name}")
+            decoded = xr.conventions.decode_cf_variable(name, variable)
+            time_coders[name] = xr.coders.CFDatetimeCoder(
+                use_cftime=True if decoded.dtype.kind == "O" else None
+            )
+    loaded = materialize(selected, context)
+    decoded = xr.decode_cf(loaded, decode_times=time_coders, concat_characters=False).load()
+    for name, coder in time_coders.items():
+        coordinate = decoded.variables[name]
+        if coder.use_cftime and coordinate.dims == (name,) and coordinate.size == 0:
+            # No values remain from which xarray could infer an empty CFTimeIndex.
+            decoded = decoded.assign_coords(
+                {
+                    name: xr.IndexVariable(
+                        (name,),
+                        xr.CFTimeIndex([], name=name),
+                        attrs=coordinate.attrs,
+                        encoding=coordinate.encoding,
+                    )
+                }
+            )
+    return decoded
+
+
 def materialize(dataset, context=None, *, block_bytes=8 * 1024 * 1024):
     """Load selected arrays, checking cancellation between at most 8 MiB slabs.
 
@@ -69,7 +130,13 @@ def materialize(dataset, context=None, *, block_bytes=8 * 1024 * 1024):
     must fit memory; this bounds temporary reads and adds cooperative checkpoints.
     """
     if context is None:
-        return dataset.load()
+        dataset = dataset.load()
+        # Readers defer default indexes so opening cannot read whole coordinates.
+        # Restore label-based selection only after the positional subset is eager.
+        for name, coordinate in dataset.coords.items():
+            if coordinate.dims == (name,) and name not in dataset.xindexes:
+                dataset = dataset.set_xindex(name)
+        return dataset
     variables = {}
     for name, variable in dataset.variables.items():
         context.checkpoint(f"read {name}")

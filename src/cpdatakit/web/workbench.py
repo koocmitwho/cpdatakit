@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import tempfile
 import uuid
 import zipfile
@@ -15,11 +14,13 @@ from fastapi import File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from starlette.background import BackgroundTask
 
+from .._atomic import publish_directory
 from ..application import ImportInspectRequest, ReadLimits, import_and_inspect
 from ..application.data_access import contract_dict, path_sha256, resolve_contract
-from ..exceptions import CatalogError, CPDataKitError, SchemaError
+from ..exceptions import CatalogError, CPDataKitError, OutputExistsError, SchemaError
 from ..schema import BUILTIN_PROFILES
 from .artifacts import artifact_digest
+from .uploads import UploadPublication, cleanup_upload_staging, upload_failure
 
 
 def project_directory(app, project_id: int) -> Path:
@@ -60,6 +61,8 @@ def install_workbench(app, templates, *, csrf_token, session_token, require_csrf
     def project_page(request: Request, project_id: int) -> Response:
         try:
             project_directory(app, project_id)
+            live_jobs = app.state.project_job_summaries(project_id)
+            active_jobs = [item for item in live_jobs.values() if item["active"]]
             context = {
                 "project": catalog.get_project(project_id),
                 "csrf_token": csrf_token,
@@ -86,15 +89,20 @@ def install_workbench(app, templates, *, csrf_token, session_token, require_csrf
                     for item in context["artifacts"]
                 ],
                 "jobs": [
-                    {
-                        "id": item.id,
-                        "operation": item.operation,
-                        "status": item.status,
-                        "output_filename": item.output_filename,
-                        "operation_log": list(item.operation_log[-1:]),
-                    }
+                    live_jobs.get(
+                        item.id,
+                        {
+                            "id": item.id,
+                            "operation": item.operation,
+                            "status": item.status,
+                            "output_filename": item.output_filename,
+                            "operation_log": list(item.operation_log[-1:]),
+                            "active": False,
+                        },
+                    )
                     for item in context["jobs"]
                 ],
+                "active_jobs": active_jobs,
                 "pagination": {
                     "limit": 50,
                     "offset": 0,
@@ -102,6 +110,11 @@ def install_workbench(app, templates, *, csrf_token, session_token, require_csrf
                     "has_more": {kind: counts[kind] > len(context[kind]) for kind in counts},
                 },
             }
+            context["visible_jobs"] = list(
+                {
+                    item["id"]: item for item in [*context["resource_state"]["jobs"], *active_jobs]
+                }.values()
+            )
         except CatalogError:
             return _json_error(404, "project_not_found", "Project not found.", "Choose a project.")
         response = templates.TemplateResponse(request=request, name="project.html", context=context)
@@ -187,8 +200,7 @@ def install_workbench(app, templates, *, csrf_token, session_token, require_csrf
         csrf_token_form: Annotated[str | None, Form(alias="csrf_token")] = None,
     ) -> Response:
         staging = None
-        installed = None
-        registered = False
+        publication = None
         try:
             error = require_csrf(request, csrf_token_form)
             if error is not None:
@@ -263,15 +275,21 @@ def install_workbench(app, templates, *, csrf_token, session_token, require_csrf
             if not result.ok:
                 status = 413 if result.error.code == "read_limit_exceeded" else 400
                 return JSONResponse(result.to_dict(), status_code=status)
-            digest = path_sha256(staged_store)
-            os.replace(staged_store, target)
-            installed = target
-            record = catalog.register_dataset(
-                project_id, target, sha256=digest, metadata={"schema": schema_name}
-            )
-            registered = True
+            publication = UploadPublication(staged_store, target, app.state.workspace)
+            publish_directory(staged_store, target)
+            publication.published = True
+            record = publication.register(catalog, project_id, metadata={"schema": schema_name})
             return JSONResponse({**result.to_dict(), "dataset_id": record.id})
+        except OutputExistsError:
+            return _json_error(
+                409,
+                "upload_exists",
+                "This Zarr directory already exists.",
+                "Rename the directory and retry.",
+            )
         except (CPDataKitError, OSError, ValueError):
+            if publication is not None and publication.published:
+                return upload_failure(publication)
             return _json_error(
                 400,
                 "upload_rejected",
@@ -282,9 +300,7 @@ def install_workbench(app, templates, *, csrf_token, session_token, require_csrf
             for file in files:
                 file.file.close()
             if staging is not None:
-                shutil.rmtree(staging)
-            if installed is not None and not registered:
-                shutil.rmtree(installed)
+                cleanup_upload_staging(staging)
 
     @app.get("/api/projects/{project_id}/artifacts/{artifact_id}")
     def artifact(project_id: int, artifact_id: int, download: bool = False) -> Response:

@@ -1,0 +1,1173 @@
+{
+  "date": "2026-09-16",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.10",
+  "versions": {
+    "numpy": "2.5.3",
+    "xarray": "2026.7.0",
+    "h5py": "3.16.0",
+    "h5netcdf": "1.8.1",
+    "netCDF4": "1.7.4",
+    "zarr": "3.3.0"
+  },
+  "baseline_commit": "2ce41c404c6228820bb190b5d41fb3684dfa6e7d",
+  "fixture": {
+    "records": 10000,
+    "array_dtypes_on_disk": "int64 coordinate and float64 variables",
+    "zarr_chunk_length": 128,
+    "single_record_index": 4321
+  },
+  "measurement": {
+    "h5netcdf": "Wrap h5py.Dataset.__getitem__ and retain the real returned array.",
+    "netcdf4": "Wrap xarray NetCDF4ArrayWrapper._getitem and call its original implementation, which reads the actual netCDF4.Variable.",
+    "zarr": "Wrap zarr.storage.LocalStore.get and retain actual returned chunk buffers; counts exclude metadata and filesystem cache effects.",
+    "baseline": "Execute the unchanged reader source from local HEAD against the same synthetic on-disk fixtures. No repository files are reverted.",
+    "limits": "Returned NetCDF elements and Zarr chunk buffers are measured, not operating-system physical I/O. CF datetime inspection and selection include bounded endpoint sampling for dtype; over-limit inputs are rejected before sampling.",
+    "time_semantics_boundary": "Endpoint samples preserve confirmed cftime requirements, but cannot detect out-of-range interior dates on arbitrary nonmonotonic axes. Selected dates remain automatically decoded. Full load followed by isel is required to guarantee the full-axis automatic index type."
+  },
+  "results": [
+    {
+      "backend": "h5netcdf",
+      "coordinate": "numeric",
+      "revision": "v0.8.1 HEAD",
+      "operation": "inspect",
+      "arrays_read": {
+        "record": {
+          "calls": 1,
+          "elements_returned": 10000,
+          "bytes_returned": 80000,
+          "slices": [
+            "(slice(None, None, None),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "h5netcdf",
+      "coordinate": "numeric",
+      "revision": "v0.8.1 HEAD",
+      "operation": "reject max_records=1",
+      "arrays_read": {
+        "record": {
+          "calls": 1,
+          "elements_returned": 10000,
+          "bytes_returned": 80000,
+          "slices": [
+            "(slice(None, None, None),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "h5netcdf",
+      "coordinate": "numeric",
+      "revision": "v0.8.1 HEAD",
+      "operation": "select 4321:4322",
+      "arrays_read": {
+        "record": {
+          "calls": 1,
+          "elements_returned": 10000,
+          "bytes_returned": 80000,
+          "slices": [
+            "(slice(None, None, None),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "h5netcdf",
+      "coordinate": "numeric",
+      "revision": "v0.8.1 HEAD",
+      "operation": "select 4321:4322 with context",
+      "arrays_read": {
+        "record": {
+          "calls": 1,
+          "elements_returned": 10000,
+          "bytes_returned": 80000,
+          "slices": [
+            "(slice(None, None, None),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "h5netcdf",
+      "coordinate": "numeric",
+      "revision": "R3 working tree",
+      "operation": "inspect",
+      "arrays_read": {}
+    },
+    {
+      "backend": "h5netcdf",
+      "coordinate": "numeric",
+      "revision": "R3 working tree",
+      "operation": "reject max_records=1",
+      "arrays_read": {}
+    },
+    {
+      "backend": "h5netcdf",
+      "coordinate": "numeric",
+      "revision": "R3 working tree",
+      "operation": "select 4321:4322",
+      "arrays_read": {
+        "record": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "h5netcdf",
+      "coordinate": "numeric",
+      "revision": "R3 working tree",
+      "operation": "select 4321:4322 with context",
+      "arrays_read": {
+        "record": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "h5netcdf",
+      "coordinate": "CF datetime",
+      "revision": "v0.8.1 HEAD",
+      "operation": "inspect",
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "elements_returned": 10002,
+          "bytes_returned": 80016,
+          "slices": [
+            "(slice(0, 1, 1),)",
+            "(slice(9999, 10000, 1),)",
+            "(slice(None, None, None),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "h5netcdf",
+      "coordinate": "CF datetime",
+      "revision": "v0.8.1 HEAD",
+      "operation": "reject max_records=1",
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "elements_returned": 10002,
+          "bytes_returned": 80016,
+          "slices": [
+            "(slice(0, 1, 1),)",
+            "(slice(9999, 10000, 1),)",
+            "(slice(None, None, None),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "h5netcdf",
+      "coordinate": "CF datetime",
+      "revision": "v0.8.1 HEAD",
+      "operation": "select 4321:4322",
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "elements_returned": 10002,
+          "bytes_returned": 80016,
+          "slices": [
+            "(slice(0, 1, 1),)",
+            "(slice(9999, 10000, 1),)",
+            "(slice(None, None, None),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "h5netcdf",
+      "coordinate": "CF datetime",
+      "revision": "v0.8.1 HEAD",
+      "operation": "select 4321:4322 with context",
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "elements_returned": 10002,
+          "bytes_returned": 80016,
+          "slices": [
+            "(slice(0, 1, 1),)",
+            "(slice(9999, 10000, 1),)",
+            "(slice(None, None, None),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "h5netcdf",
+      "coordinate": "CF datetime",
+      "revision": "R3 working tree",
+      "operation": "inspect",
+      "arrays_read": {
+        "record": {
+          "calls": 2,
+          "elements_returned": 2,
+          "bytes_returned": 16,
+          "slices": [
+            "(slice(0, 1, 1),)",
+            "(slice(9999, 10000, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "h5netcdf",
+      "coordinate": "CF datetime",
+      "revision": "R3 working tree",
+      "operation": "reject max_records=1",
+      "arrays_read": {}
+    },
+    {
+      "backend": "h5netcdf",
+      "coordinate": "CF datetime",
+      "revision": "R3 working tree",
+      "operation": "select 4321:4322",
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "elements_returned": 3,
+          "bytes_returned": 24,
+          "slices": [
+            "(slice(0, 1, 1),)",
+            "(slice(9999, 10000, 1),)",
+            "(slice(4321, 4322, 1),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "h5netcdf",
+      "coordinate": "CF datetime",
+      "revision": "R3 working tree",
+      "operation": "select 4321:4322 with context",
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "elements_returned": 3,
+          "bytes_returned": 24,
+          "slices": [
+            "(slice(0, 1, 1),)",
+            "(slice(9999, 10000, 1),)",
+            "(slice(4321, 4322, 1),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "netcdf4",
+      "coordinate": "numeric",
+      "revision": "v0.8.1 HEAD",
+      "operation": "inspect",
+      "arrays_read": {
+        "record": {
+          "calls": 1,
+          "elements_returned": 10000,
+          "bytes_returned": 80000,
+          "slices": [
+            "(slice(None, None, None),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "netcdf4",
+      "coordinate": "numeric",
+      "revision": "v0.8.1 HEAD",
+      "operation": "reject max_records=1",
+      "arrays_read": {
+        "record": {
+          "calls": 1,
+          "elements_returned": 10000,
+          "bytes_returned": 80000,
+          "slices": [
+            "(slice(None, None, None),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "netcdf4",
+      "coordinate": "numeric",
+      "revision": "v0.8.1 HEAD",
+      "operation": "select 4321:4322",
+      "arrays_read": {
+        "record": {
+          "calls": 1,
+          "elements_returned": 10000,
+          "bytes_returned": 80000,
+          "slices": [
+            "(slice(None, None, None),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "netcdf4",
+      "coordinate": "numeric",
+      "revision": "v0.8.1 HEAD",
+      "operation": "select 4321:4322 with context",
+      "arrays_read": {
+        "record": {
+          "calls": 1,
+          "elements_returned": 10000,
+          "bytes_returned": 80000,
+          "slices": [
+            "(slice(None, None, None),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "netcdf4",
+      "coordinate": "numeric",
+      "revision": "R3 working tree",
+      "operation": "inspect",
+      "arrays_read": {}
+    },
+    {
+      "backend": "netcdf4",
+      "coordinate": "numeric",
+      "revision": "R3 working tree",
+      "operation": "reject max_records=1",
+      "arrays_read": {}
+    },
+    {
+      "backend": "netcdf4",
+      "coordinate": "numeric",
+      "revision": "R3 working tree",
+      "operation": "select 4321:4322",
+      "arrays_read": {
+        "record": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "netcdf4",
+      "coordinate": "numeric",
+      "revision": "R3 working tree",
+      "operation": "select 4321:4322 with context",
+      "arrays_read": {
+        "record": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "netcdf4",
+      "coordinate": "CF datetime",
+      "revision": "v0.8.1 HEAD",
+      "operation": "inspect",
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "elements_returned": 10002,
+          "bytes_returned": 80016,
+          "slices": [
+            "(slice(0, 1, 1),)",
+            "(slice(9999, 10000, 1),)",
+            "(slice(None, None, None),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "netcdf4",
+      "coordinate": "CF datetime",
+      "revision": "v0.8.1 HEAD",
+      "operation": "reject max_records=1",
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "elements_returned": 10002,
+          "bytes_returned": 80016,
+          "slices": [
+            "(slice(0, 1, 1),)",
+            "(slice(9999, 10000, 1),)",
+            "(slice(None, None, None),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "netcdf4",
+      "coordinate": "CF datetime",
+      "revision": "v0.8.1 HEAD",
+      "operation": "select 4321:4322",
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "elements_returned": 10002,
+          "bytes_returned": 80016,
+          "slices": [
+            "(slice(0, 1, 1),)",
+            "(slice(9999, 10000, 1),)",
+            "(slice(None, None, None),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "netcdf4",
+      "coordinate": "CF datetime",
+      "revision": "v0.8.1 HEAD",
+      "operation": "select 4321:4322 with context",
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "elements_returned": 10002,
+          "bytes_returned": 80016,
+          "slices": [
+            "(slice(0, 1, 1),)",
+            "(slice(9999, 10000, 1),)",
+            "(slice(None, None, None),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "netcdf4",
+      "coordinate": "CF datetime",
+      "revision": "R3 working tree",
+      "operation": "inspect",
+      "arrays_read": {
+        "record": {
+          "calls": 2,
+          "elements_returned": 2,
+          "bytes_returned": 16,
+          "slices": [
+            "(slice(0, 1, 1),)",
+            "(slice(9999, 10000, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "netcdf4",
+      "coordinate": "CF datetime",
+      "revision": "R3 working tree",
+      "operation": "reject max_records=1",
+      "arrays_read": {}
+    },
+    {
+      "backend": "netcdf4",
+      "coordinate": "CF datetime",
+      "revision": "R3 working tree",
+      "operation": "select 4321:4322",
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "elements_returned": 3,
+          "bytes_returned": 24,
+          "slices": [
+            "(slice(0, 1, 1),)",
+            "(slice(9999, 10000, 1),)",
+            "(slice(4321, 4322, 1),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "netcdf4",
+      "coordinate": "CF datetime",
+      "revision": "R3 working tree",
+      "operation": "select 4321:4322 with context",
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "elements_returned": 3,
+          "bytes_returned": 24,
+          "slices": [
+            "(slice(0, 1, 1),)",
+            "(slice(9999, 10000, 1),)",
+            "(slice(4321, 4322, 1),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 1,
+          "bytes_returned": 8,
+          "slices": [
+            "(slice(4321, 4322, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "zarr",
+      "coordinate": "numeric",
+      "revision": "v0.8.1 HEAD",
+      "operation": "inspect",
+      "arrays_read": {
+        "record": {
+          "calls": 79,
+          "stored_chunk_bytes_returned": 13150,
+          "unique_chunks": 79,
+          "chunk_index_min": 0,
+          "chunk_index_max": 78,
+          "logical_elements_in_touched_chunks": 10000
+        }
+      }
+    },
+    {
+      "backend": "zarr",
+      "coordinate": "numeric",
+      "revision": "v0.8.1 HEAD",
+      "operation": "reject max_records=1",
+      "arrays_read": {
+        "record": {
+          "calls": 79,
+          "stored_chunk_bytes_returned": 13150,
+          "unique_chunks": 79,
+          "chunk_index_min": 0,
+          "chunk_index_max": 78,
+          "logical_elements_in_touched_chunks": 10000
+        }
+      }
+    },
+    {
+      "backend": "zarr",
+      "coordinate": "numeric",
+      "revision": "v0.8.1 HEAD",
+      "operation": "select 4321:4322",
+      "arrays_read": {
+        "record": {
+          "calls": 79,
+          "stored_chunk_bytes_returned": 13150,
+          "unique_chunks": 79,
+          "chunk_index_min": 0,
+          "chunk_index_max": 78,
+          "logical_elements_in_touched_chunks": 10000
+        },
+        "temperature": {
+          "calls": 1,
+          "stored_chunk_bytes_returned": 174,
+          "unique_chunks": 1,
+          "chunk_index_min": 33,
+          "chunk_index_max": 33,
+          "logical_elements_in_touched_chunks": 128,
+          "chunk_indices": [
+            33
+          ]
+        }
+      }
+    },
+    {
+      "backend": "zarr",
+      "coordinate": "numeric",
+      "revision": "v0.8.1 HEAD",
+      "operation": "select 4321:4322 with context",
+      "arrays_read": {
+        "record": {
+          "calls": 79,
+          "stored_chunk_bytes_returned": 13150,
+          "unique_chunks": 79,
+          "chunk_index_min": 0,
+          "chunk_index_max": 78,
+          "logical_elements_in_touched_chunks": 10000
+        },
+        "temperature": {
+          "calls": 1,
+          "stored_chunk_bytes_returned": 174,
+          "unique_chunks": 1,
+          "chunk_index_min": 33,
+          "chunk_index_max": 33,
+          "logical_elements_in_touched_chunks": 128,
+          "chunk_indices": [
+            33
+          ]
+        }
+      }
+    },
+    {
+      "backend": "zarr",
+      "coordinate": "numeric",
+      "revision": "R3 working tree",
+      "operation": "inspect",
+      "arrays_read": {}
+    },
+    {
+      "backend": "zarr",
+      "coordinate": "numeric",
+      "revision": "R3 working tree",
+      "operation": "reject max_records=1",
+      "arrays_read": {}
+    },
+    {
+      "backend": "zarr",
+      "coordinate": "numeric",
+      "revision": "R3 working tree",
+      "operation": "select 4321:4322",
+      "arrays_read": {
+        "record": {
+          "calls": 1,
+          "stored_chunk_bytes_returned": 167,
+          "unique_chunks": 1,
+          "chunk_index_min": 33,
+          "chunk_index_max": 33,
+          "logical_elements_in_touched_chunks": 128,
+          "chunk_indices": [
+            33
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "stored_chunk_bytes_returned": 174,
+          "unique_chunks": 1,
+          "chunk_index_min": 33,
+          "chunk_index_max": 33,
+          "logical_elements_in_touched_chunks": 128,
+          "chunk_indices": [
+            33
+          ]
+        }
+      }
+    },
+    {
+      "backend": "zarr",
+      "coordinate": "numeric",
+      "revision": "R3 working tree",
+      "operation": "select 4321:4322 with context",
+      "arrays_read": {
+        "record": {
+          "calls": 1,
+          "stored_chunk_bytes_returned": 167,
+          "unique_chunks": 1,
+          "chunk_index_min": 33,
+          "chunk_index_max": 33,
+          "logical_elements_in_touched_chunks": 128,
+          "chunk_indices": [
+            33
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "stored_chunk_bytes_returned": 174,
+          "unique_chunks": 1,
+          "chunk_index_min": 33,
+          "chunk_index_max": 33,
+          "logical_elements_in_touched_chunks": 128,
+          "chunk_indices": [
+            33
+          ]
+        }
+      }
+    },
+    {
+      "backend": "zarr",
+      "coordinate": "CF datetime",
+      "revision": "v0.8.1 HEAD",
+      "operation": "inspect",
+      "arrays_read": {
+        "record": {
+          "calls": 81,
+          "stored_chunk_bytes_returned": 13395,
+          "unique_chunks": 79,
+          "chunk_index_min": 0,
+          "chunk_index_max": 78,
+          "logical_elements_in_touched_chunks": 10000
+        }
+      }
+    },
+    {
+      "backend": "zarr",
+      "coordinate": "CF datetime",
+      "revision": "v0.8.1 HEAD",
+      "operation": "reject max_records=1",
+      "arrays_read": {
+        "record": {
+          "calls": 81,
+          "stored_chunk_bytes_returned": 13395,
+          "unique_chunks": 79,
+          "chunk_index_min": 0,
+          "chunk_index_max": 78,
+          "logical_elements_in_touched_chunks": 10000
+        }
+      }
+    },
+    {
+      "backend": "zarr",
+      "coordinate": "CF datetime",
+      "revision": "v0.8.1 HEAD",
+      "operation": "select 4321:4322",
+      "arrays_read": {
+        "record": {
+          "calls": 81,
+          "stored_chunk_bytes_returned": 13395,
+          "unique_chunks": 79,
+          "chunk_index_min": 0,
+          "chunk_index_max": 78,
+          "logical_elements_in_touched_chunks": 10000
+        },
+        "temperature": {
+          "calls": 1,
+          "stored_chunk_bytes_returned": 174,
+          "unique_chunks": 1,
+          "chunk_index_min": 33,
+          "chunk_index_max": 33,
+          "logical_elements_in_touched_chunks": 128,
+          "chunk_indices": [
+            33
+          ]
+        }
+      }
+    },
+    {
+      "backend": "zarr",
+      "coordinate": "CF datetime",
+      "revision": "v0.8.1 HEAD",
+      "operation": "select 4321:4322 with context",
+      "arrays_read": {
+        "record": {
+          "calls": 81,
+          "stored_chunk_bytes_returned": 13395,
+          "unique_chunks": 79,
+          "chunk_index_min": 0,
+          "chunk_index_max": 78,
+          "logical_elements_in_touched_chunks": 10000
+        },
+        "temperature": {
+          "calls": 1,
+          "stored_chunk_bytes_returned": 174,
+          "unique_chunks": 1,
+          "chunk_index_min": 33,
+          "chunk_index_max": 33,
+          "logical_elements_in_touched_chunks": 128,
+          "chunk_indices": [
+            33
+          ]
+        }
+      }
+    },
+    {
+      "backend": "zarr",
+      "coordinate": "CF datetime",
+      "revision": "R3 working tree",
+      "operation": "inspect",
+      "arrays_read": {
+        "record": {
+          "calls": 2,
+          "stored_chunk_bytes_returned": 245,
+          "unique_chunks": 2,
+          "chunk_index_min": 0,
+          "chunk_index_max": 78,
+          "logical_elements_in_touched_chunks": 144,
+          "chunk_indices": [
+            0,
+            78
+          ]
+        }
+      }
+    },
+    {
+      "backend": "zarr",
+      "coordinate": "CF datetime",
+      "revision": "R3 working tree",
+      "operation": "reject max_records=1",
+      "arrays_read": {}
+    },
+    {
+      "backend": "zarr",
+      "coordinate": "CF datetime",
+      "revision": "R3 working tree",
+      "operation": "select 4321:4322",
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "stored_chunk_bytes_returned": 412,
+          "unique_chunks": 3,
+          "chunk_index_min": 0,
+          "chunk_index_max": 78,
+          "logical_elements_in_touched_chunks": 272,
+          "chunk_indices": [
+            0,
+            33,
+            78
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "stored_chunk_bytes_returned": 174,
+          "unique_chunks": 1,
+          "chunk_index_min": 33,
+          "chunk_index_max": 33,
+          "logical_elements_in_touched_chunks": 128,
+          "chunk_indices": [
+            33
+          ]
+        }
+      }
+    },
+    {
+      "backend": "zarr",
+      "coordinate": "CF datetime",
+      "revision": "R3 working tree",
+      "operation": "select 4321:4322 with context",
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "stored_chunk_bytes_returned": 412,
+          "unique_chunks": 3,
+          "chunk_index_min": 0,
+          "chunk_index_max": 78,
+          "logical_elements_in_touched_chunks": 272,
+          "chunk_indices": [
+            0,
+            33,
+            78
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "stored_chunk_bytes_returned": 174,
+          "unique_chunks": 1,
+          "chunk_index_min": 33,
+          "chunk_index_max": 33,
+          "logical_elements_in_touched_chunks": 128,
+          "chunk_indices": [
+            33
+          ]
+        }
+      }
+    }
+  ],
+  "nanosecond_precision": [
+    {
+      "backend": "h5netcdf",
+      "context": false,
+      "decoded_nanoseconds": [
+        1700000000000000001,
+        1700000000000000003,
+        -9223372036854775808
+      ],
+      "last_is_nat": true,
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "elements_returned": 5,
+          "bytes_returned": 40,
+          "slices": [
+            "(slice(0, 1, 1),)",
+            "(slice(9999, 10000, 1),)",
+            "(slice(4321, 4324, 1),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 3,
+          "bytes_returned": 24,
+          "slices": [
+            "(slice(4321, 4324, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "h5netcdf",
+      "context": true,
+      "decoded_nanoseconds": [
+        1700000000000000001,
+        1700000000000000003,
+        -9223372036854775808
+      ],
+      "last_is_nat": true,
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "elements_returned": 5,
+          "bytes_returned": 40,
+          "slices": [
+            "(slice(0, 1, 1),)",
+            "(slice(9999, 10000, 1),)",
+            "(slice(4321, 4324, 1),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 3,
+          "bytes_returned": 24,
+          "slices": [
+            "(slice(4321, 4324, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "netcdf4",
+      "context": false,
+      "decoded_nanoseconds": [
+        1700000000000000001,
+        1700000000000000003,
+        -9223372036854775808
+      ],
+      "last_is_nat": true,
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "elements_returned": 5,
+          "bytes_returned": 40,
+          "slices": [
+            "(slice(0, 1, 1),)",
+            "(slice(9999, 10000, 1),)",
+            "(slice(4321, 4324, 1),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 3,
+          "bytes_returned": 24,
+          "slices": [
+            "(slice(4321, 4324, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "netcdf4",
+      "context": true,
+      "decoded_nanoseconds": [
+        1700000000000000001,
+        1700000000000000003,
+        -9223372036854775808
+      ],
+      "last_is_nat": true,
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "elements_returned": 5,
+          "bytes_returned": 40,
+          "slices": [
+            "(slice(0, 1, 1),)",
+            "(slice(9999, 10000, 1),)",
+            "(slice(4321, 4324, 1),)"
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "elements_returned": 3,
+          "bytes_returned": 24,
+          "slices": [
+            "(slice(4321, 4324, 1),)"
+          ]
+        }
+      }
+    },
+    {
+      "backend": "zarr",
+      "context": false,
+      "decoded_nanoseconds": [
+        1700000000000000001,
+        1700000000000000003,
+        -9223372036854775808
+      ],
+      "last_is_nat": true,
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "stored_chunk_bytes_returned": 418,
+          "unique_chunks": 3,
+          "chunk_index_min": 0,
+          "chunk_index_max": 78,
+          "logical_elements_in_touched_chunks": 272,
+          "chunk_indices": [
+            0,
+            33,
+            78
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "stored_chunk_bytes_returned": 169,
+          "unique_chunks": 1,
+          "chunk_index_min": 33,
+          "chunk_index_max": 33,
+          "logical_elements_in_touched_chunks": 128,
+          "chunk_indices": [
+            33
+          ]
+        }
+      }
+    },
+    {
+      "backend": "zarr",
+      "context": true,
+      "decoded_nanoseconds": [
+        1700000000000000001,
+        1700000000000000003,
+        -9223372036854775808
+      ],
+      "last_is_nat": true,
+      "arrays_read": {
+        "record": {
+          "calls": 3,
+          "stored_chunk_bytes_returned": 418,
+          "unique_chunks": 3,
+          "chunk_index_min": 0,
+          "chunk_index_max": 78,
+          "logical_elements_in_touched_chunks": 272,
+          "chunk_indices": [
+            0,
+            33,
+            78
+          ]
+        },
+        "temperature": {
+          "calls": 1,
+          "stored_chunk_bytes_returned": 169,
+          "unique_chunks": 1,
+          "chunk_index_min": 33,
+          "chunk_index_max": 33,
+          "logical_elements_in_touched_chunks": 128,
+          "chunk_indices": [
+            33
+          ]
+        }
+      }
+    }
+  ]
+}

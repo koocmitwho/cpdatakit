@@ -3,8 +3,9 @@
 This run uses deterministic synthetic data. It validates a declared crystal-plasticity curve,
 writes an HDF5 file with provenance, and renders a stress-strain plot.
 
-For the v0.8 workflows, see [multidimensional viewing, schema drafting and
-batch conversion](post-v07-workflows.md). The current release walkthrough below remains valid.
+For the v0.9.0 Chinese interface, start with the [workbench guide](workbench-guide.md).
+See [multidimensional viewing, schema drafting and batch conversion](post-v07-workflows.md)
+for advanced workflows. The command-line walkthrough below uses the current release.
 
 ## 1. Install the current release
 
@@ -29,13 +30,13 @@ source .venv/bin/activate
 Install the current release from PyPI:
 
 ```bash
-python -m pip install "cpdatakit==0.8.0"
+python -m pip install "cpdatakit==0.9.0"
 ```
 
-For a pinned GitHub v0.8.0 release wheel, use:
+For a pinned GitHub v0.9.0 release wheel, use:
 
 ```bash
-python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download/v0.8.0/cpdatakit-0.8.0-py3-none-any.whl"
+python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download/v0.9.0/cpdatakit-0.9.0-py3-none-any.whl"
 ```
 
 ## 2. Generate a reproducible example
@@ -77,9 +78,11 @@ cpdatakit report curve.h5 --schema curve --output report.html
 The inspection result lists the format and version, field order, dtype, shape, units, missing
 values, HDF5 chunks, provenance, adapter details, and structural risks. The report adds the schema
 profile/version, validation errors and warnings, descriptive statistics, and scope note. Open
-`report.html` in a browser or print it in an offline environment. Existing output stays in place.
-pass `--force` when replacement is intended. The report describes declared structural checks. Use
-domain methods to interpret physical and scientific results.
+`report.html` in a browser or print it in an offline environment. The Chinese HTML overview presents
+counts, field and statistics tables, and provenance summaries; full metadata remains expandable.
+Unknown values are not filled with zero, and undeclared units are not treated as dimensionless.
+Existing output stays in place; pass `--force` when replacement is intended. The report describes
+declared structural checks. Use domain methods to interpret physical and scientific results.
 
 ## 6. Plot the declared curve
 
@@ -101,8 +104,12 @@ cpdatakit ui --workspace cpdatakit-workspace
 
 The workbench binds to loopback, opens the default browser, and keeps its catalog, uploads, and
 artifacts below the selected workspace. Use `--no-browser` for a headless smoke check.
+Follow the [Chinese workbench guide](workbench-guide.md) to upload a file, select its data rules,
+validate it, and create a report. The UI explains same-name output conflicts and provides access
+to interrupted-output recovery. Reports use the selected uploaded file; upload a converted result
+as a new input before validating or reporting on that output in the page.
 
-## 7. Read a window or stream chunks
+## 8. Read a window or stream chunks
 
 For bounded access, use the explicit HDF5 readers:
 
@@ -116,10 +123,10 @@ for chunk in iter_hdf5_chunks("curve.h5", fields=["step", "stress"], chunk_size=
 
 `start` is inclusive and `stop` is exclusive. Field order follows the requested order, and
 every chunk is a `Dataset` with the HDF5 metadata and source path preserved. Reads are sliced
-along the record axis, so vector and tensor values keep their per-record shapes. Use
+along the record axis, so vector and tensor values keep their per-record shapes.
 Choose `load_dataset()` when the existing full-read workflow is sufficient.
 
-## 8. Opt into record-axis HDF5 storage chunks
+## 9. Opt into record-axis HDF5 storage chunks
 
 For a larger sequential-read workload, choose the HDF5 storage layout explicitly while keeping
 the same read APIs:
@@ -149,7 +156,7 @@ vector and tensor trailing dimensions remain intact. It is separate from the rea
 `iter_hdf5_chunks(..., chunk_size=...)` batch size. Use `load_hdf5()` for a selected window,
 `iter_hdf5_chunks()` for bounded iteration, and `load_dataset()` for the existing full-read path.
 
-## 9. Measure read scaling
+## 10. Measure read scaling
 
 From a repository checkout with the development environment active, run both diagnostic sizes:
 

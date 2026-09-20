@@ -1,39 +1,25 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>CPDataKit local workbench</title>
-    <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
-    <script type="module" src="{{ url_for('static', path='app.js') }}"></script>
-  </head>
-  <body>
-    <header class="topbar"><a href="/">CPDataKit</a><span>LOCAL WORKBENCH</span></header>
-    <main>
-    <h1>CPDataKit local workbench</h1>
-    <p class="lead">Organize data, validate a schema, and create downloadable results.</p>
-    <section>
-      <h2>Create project</h2>
-      <form method="post" action="/api/projects">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <label for="project-name">Project name</label>
-        <input id="project-name" name="name" required maxlength="200">
-        <button type="submit">Create project</button>
-      </form>
-    </section>
-    <section>
-      <h2>Projects</h2>
-      <ul>
-        {% for project in projects %}
-        <li data-project-id="{{ project.id }}"><a href="/projects/{{ project.id }}">{{ project.name }} →</a></li>
-        {% else %}
-        <li>No projects yet.</li>
-        {% endfor %}
-      </ul>
-    </section>
-    <div id="home-error" role="alert"></div>
-    <footer>Your files and results stay in the local workspace.</footer>
-    </main>
-  </body>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CPDataKit local workbench · 本地科研数据工作台</title>
+  <link rel="icon" href="data:,"><link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+  <script type="module" src="{{ url_for('static', path='app.js') }}"></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/">CP<span>DataKit</span></a><span class="local-indicator">本地工作台 · 文件保存在这台电脑</span></header>
+  <main class="home-main">
+    <div class="home-intro"><p class="eyebrow">科研数据，从检查到交付</p><h1>看清数据，<br>再开始下一步。</h1><p class="lead">在项目中管理文件，确认字段和单位，生成可追溯的数据与报告。</p></div>
+    <div class="home-grid">
+      <section class="panel"><p class="eyebrow">开始一次处理</p><h2>创建项目</h2><p class="hint">为一项实验、一组模拟或一次数据整理建立独立空间。</p>
+        <form method="post" action="/api/projects"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><label for="project-name">项目名称</label><input id="project-name" name="name" required maxlength="200" placeholder="例如：拉伸实验数据检查"><button type="submit">创建项目</button></form>
+        <div id="home-error" role="alert"></div>
+      </section>
+      <section class="panel"><p class="eyebrow">继续已有工作</p><h2>我的项目 <span class="count">{{ projects|length }}</span></h2>
+        <ul class="project-list">{% for project in projects %}<li data-project-id="{{ project.id }}"><a href="/projects/{{ project.id }}"><span>{{ project.name }}</span><span aria-hidden="true">→</span></a></li>{% else %}<li class="empty-state">还没有项目。从左侧创建一个项目，然后上传数据。</li>{% endfor %}</ul>
+      </section>
+    </div>
+    <footer>支持 CSV、JSON、CPDataKit HDF5、NetCDF、Parquet 和 Zarr。所有文件与结果保存在本地工作区。</footer>
+  </main>
+</body>
 </html>

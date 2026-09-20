@@ -8,6 +8,7 @@ from numbers import Real
 from pathlib import Path
 from typing import Any
 
+from ._numeric_summary import finite_difference, numeric_equal
 from .exceptions import SchemaError
 from .schemas import ResolvedSchemaV2, SchemaV2, resolve_schema_v2, schema_v2_sha256
 
@@ -123,6 +124,21 @@ def _statistics(report: Mapping[str, Any]) -> Mapping[str, Any]:
     return fields if isinstance(fields, Mapping) else {}
 
 
+def _unit_conflicts(report: Mapping[str, Any]) -> set[str]:
+    """Distinguish a conflict's unknown unit from a legitimate null string unit."""
+    validation = report.get("validation")
+    errors = validation.get("errors") if isinstance(validation, Mapping) else None
+    if not isinstance(errors, list):
+        return set()
+    return {
+        item["field"]
+        for item in errors
+        if isinstance(item, Mapping)
+        and item.get("code") == "unit_conflict"
+        and isinstance(item.get("field"), str)
+    }
+
+
 def _finite(value: Any) -> bool:
     return isinstance(value, Real) and not isinstance(value, bool) and math.isfinite(float(value))
 
@@ -161,7 +177,11 @@ def _comparability_reason(name: str, left: SchemaV2, right: SchemaV2) -> str | N
     return None
 
 
-def _observed_reason(name: str, statistics: Mapping[str, Any], schema: SchemaV2) -> str | None:
+def _observed_reason(
+    name: str, statistics: Mapping[str, Any], schema: SchemaV2, unit_conflicts: set[str]
+) -> str | None:
+    if name in unit_conflicts:
+        return "Observed unit declarations conflict or are invalid"
     item = statistics.get(name)
     if not isinstance(item, Mapping):
         return None  # Missing aggregates are reported as unavailable below.
@@ -178,7 +198,7 @@ def _observed_reason(name: str, statistics: Mapping[str, Any], schema: SchemaV2)
 
 
 def _observed_coordinate_reason(
-    name: str, statistics: Mapping[str, Any], schema: SchemaV2
+    name: str, statistics: Mapping[str, Any], schema: SchemaV2, unit_conflicts: set[str]
 ) -> str | None:
     declaration = {**_named(schema.coordinates), **_named(schema.variables)}[name]
     dimensions = set(declaration["dims"])
@@ -187,7 +207,7 @@ def _observed_coordinate_reason(
             continue
         if coordinate.dims and not dimensions.intersection(coordinate.dims):
             continue
-        reason = _observed_reason(coordinate.name, statistics, schema)
+        reason = _observed_reason(coordinate.name, statistics, schema, unit_conflicts)
         if reason:
             return f"Coordinate observation differs: {coordinate.name} ({reason})"
     return None
@@ -198,6 +218,10 @@ def compare_scientific_statistics(
 ) -> dict[str, list[dict[str, Any]]]:
     """Subtract only compatible numeric aggregates; retain all missing-value evidence."""
     left_stats, right_stats = _statistics(left_report), _statistics(right_report)
+    left_unit_conflicts, right_unit_conflicts = (
+        _unit_conflicts(left_report),
+        _unit_conflicts(right_report),
+    )
     if not all(isinstance(report.get("schema"), Mapping) for report in (left_report, right_report)):
         names = list(dict.fromkeys((*left_stats, *right_stats))) or ["all fields"]
         return {
@@ -228,13 +252,13 @@ def compare_scientific_statistics(
             continue
         reason = _comparability_reason(name, left, right)
         if reason is None:
-            reason = _observed_reason(name, left_stats, left) or _observed_reason(
-                name, right_stats, right
-            )
+            reason = _observed_reason(
+                name, left_stats, left, left_unit_conflicts
+            ) or _observed_reason(name, right_stats, right, right_unit_conflicts)
         if reason is None:
             reason = _observed_coordinate_reason(
-                name, left_stats, left
-            ) or _observed_coordinate_reason(name, right_stats, right)
+                name, left_stats, left, left_unit_conflicts
+            ) or _observed_coordinate_reason(name, right_stats, right, right_unit_conflicts)
         if reason:
             result["incomparable"].append({"field": name, "reason": reason})
             continue
@@ -256,6 +280,12 @@ def compare_scientific_statistics(
             }
             if not (_finite(left_value) and _finite(right_value)):
                 result["unavailable"].append(item)
-            elif left_value != right_value:
-                result["changed"].append({**item, "delta": right_value - left_value})
+            elif not numeric_equal(left_value, right_value):
+                delta = finite_difference(left_value, right_value)
+                if _finite(delta):
+                    result["changed"].append({**item, "delta": delta})
+                else:
+                    result["unavailable"].append(
+                        {**item, "reason": "Difference cannot be represented as a finite number"}
+                    )
     return result
