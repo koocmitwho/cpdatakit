@@ -16,6 +16,7 @@ from ..application.data_access import path_sha256
 from ..application.services import _comparison_provenance, _failure, _relative_artifact
 from ..exceptions import CPDataKitError, OutputExistsError
 from .artifacts import with_registered_artifact
+from .recovery import ACTIVE_TRANSACTION, OutputTransaction
 
 _PROMOTION_LOCK = threading.Lock()
 
@@ -104,6 +105,8 @@ def produce_registered(request, context, *, produce, register, operation):
     committed = False
     promotion_locked = False
     recovery = None
+    transaction = None
+    token = None
     try:
         context.checkpoint("produce " + operation)
         result = produce(replace(request, output=staged, force=False))
@@ -114,16 +117,20 @@ def produce_registered(request, context, *, produce, register, operation):
         promotion_locked = True
         context.checkpoint("register output")
         signature = _output_signature(staged)
+        transaction = OutputTransaction(request, staging, staged, backup)
+        token = ACTIVE_TRANSACTION.set(transaction)
         if target.exists():
             if not request.force:
                 raise OutputExistsError("Output appeared while conversion was running")
             os.replace(target, backup)
+            transaction.write("backed_up")
         try:
             if staged.is_dir():
                 publish_directory(staged, target)
             else:
                 publish_file(staged, target)
             promoted = True
+            transaction.write("published")
             record = register(target, expected_sha256=signature[3])
         except BaseException as exc:
             try:
@@ -157,6 +164,11 @@ def produce_registered(request, context, *, produce, register, operation):
         try:
             if committed or (recovery is None and not backup.exists()):
                 shutil.rmtree(staging, ignore_errors=True)
+                if transaction is not None:
+                    with suppress(OSError):
+                        transaction.path.unlink(missing_ok=True)
         finally:
+            if token is not None:
+                ACTIVE_TRANSACTION.reset(token)
             if promotion_locked:
                 _PROMOTION_LOCK.release()

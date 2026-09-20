@@ -209,24 +209,25 @@ def _run_fastapi_operation(fastapi: Any, httpx: Any) -> dict[str, Any]:
         async def request() -> tuple[int, dict[str, str]]:
             with tempfile.TemporaryDirectory(prefix="cpdatakit-v06-ui-") as directory:
                 app = create_app(Path(directory))
-                transport = httpx.ASGITransport(app=app)
-                async with httpx.AsyncClient(
-                    transport=transport, base_url="http://127.0.0.1"
-                ) as client:
-                    health = await client.get("/health")
-                    home = await client.get("/")
-                    style = await client.get("/static/style.css")
-                    script = await client.get("/static/app.js")
-                if health.json() != {"status": "ok"}:
-                    raise RuntimeError("health response did not match the expected payload")
-                return (
-                    health.status_code,
-                    {
-                        "ui_home_status": home.status_code,
-                        "ui_static_statuses": [style.status_code, script.status_code],
-                        "ui_has_external_asset": "https://" in home.text.lower(),
-                    },
-                )
+                async with app.router.lifespan_context(app):
+                    transport = httpx.ASGITransport(app=app)
+                    async with httpx.AsyncClient(
+                        transport=transport, base_url="http://127.0.0.1"
+                    ) as client:
+                        health = await client.get("/health")
+                        home = await client.get("/")
+                        style = await client.get("/static/style.css")
+                        script = await client.get("/static/app.js")
+                    if health.json() != {"status": "ok"}:
+                        raise RuntimeError("health response did not match the expected payload")
+                    return (
+                        health.status_code,
+                        {
+                            "ui_home_status": home.status_code,
+                            "ui_static_statuses": [style.status_code, script.status_code],
+                            "ui_has_external_asset": "https://" in home.text.lower(),
+                        },
+                    )
 
         status_code, ui_metrics = asyncio.run(request())
         if status_code != 200 or ui_metrics["ui_home_status"] != 200:

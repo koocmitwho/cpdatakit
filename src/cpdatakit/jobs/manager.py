@@ -126,6 +126,10 @@ class JobManager:
         self._lock = threading.RLock()
         self._jobs: dict[str, _JobState] = {}
         self._closed = False
+        self._shutdown_complete = threading.Event()
+        self._shutdown_callbacks: list[Callable[[], None]] = []
+        self._shutdown_wait_guards: list[Callable[[], bool]] = []
+        self._shutdown_guard = threading.Lock()
 
     def _state(self, job_id: str) -> _JobState:
         with self._lock:
@@ -345,9 +349,43 @@ class JobManager:
                 raise
         return state.record
 
-    def shutdown(self, *, wait: bool = True) -> None:
+    def add_shutdown_callback(
+        self, callback: Callable[[], None], *, can_wait: Callable[[], bool] | None = None
+    ) -> None:
+        """Close an owned resource after all workers and completion callbacks stop."""
         with self._lock:
             if self._closed:
+                raise JobError("Job manager is shut down")
+            self._shutdown_callbacks.append(callback)
+            if can_wait is not None:
+                self._shutdown_wait_guards.append(can_wait)
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
+    def _finish_shutdown(self) -> None:
+        with self._shutdown_guard:
+            if self._shutdown_complete.is_set():
                 return
+            self._executor.shutdown(wait=True)
+            try:
+                for callback in self._shutdown_callbacks:
+                    callback()
+            finally:
+                self._shutdown_complete.set()
+
+    def shutdown(self, *, wait: bool = True) -> None:
+        # A request cannot synchronously drain itself. Its finalizer retains all
+        # resource ownership until that request leaves the ASGI application.
+        wait = wait and all(guard() for guard in self._shutdown_wait_guards)
+        with self._lock:
+            first = not self._closed
             self._closed = True
-        self._executor.shutdown(wait=wait)
+        if wait:
+            self._finish_shutdown()
+        elif first:
+            self._executor.shutdown(wait=False)
+            threading.Thread(
+                target=self._finish_shutdown, name="cpdatakit-close", daemon=True
+            ).start()

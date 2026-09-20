@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 from dataclasses import dataclass, field
-from numbers import Real
+from numbers import Integral, Real
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +20,7 @@ from ..exceptions import (
     UnsupportedDataError,
 )
 from ..model import Dataset
+from .units import declared_unit
 
 _INTERNAL_RECORD_DIM = "record_dim"
 
@@ -78,9 +79,42 @@ def _scalar_values(values: list[object], name: str) -> np.ndarray:
     if all(isinstance(value, (bool, np.bool_)) for value in non_missing):
         return np.asarray(values, dtype=object if len(non_missing) != len(values) else bool)
     if all(isinstance(value, (Real, np.number)) for value in non_missing):
-        dtype = float if len(non_missing) != len(values) else None
-        return np.asarray(values, dtype=dtype)
+        original = np.asarray(values, dtype=object)
+        if len(non_missing) != len(values):
+            return original
+        try:
+            converted = np.asarray(values)
+        except (OverflowError, ValueError):
+            return original
+        return converted if _same_values(original, converted) else original
     return np.asarray(values, dtype=object)
+
+
+def _same_values(original: np.ndarray, converted: np.ndarray) -> bool:
+    """Compare numeric promotions without NumPy promoting the comparison itself."""
+    for before, after in zip(original.flat, converted.flat, strict=True):
+        if isinstance(before, np.generic):
+            before = before.item()
+        if isinstance(after, np.generic):
+            after = after.item()
+        for category in (str, bytes, bool):
+            if isinstance(before, category) != isinstance(after, category):
+                return False
+        if isinstance(before, Integral):
+            if isinstance(after, complex):
+                if after.imag != 0:
+                    return False
+                after = after.real
+            if not isinstance(after, Integral) and not np.isfinite(after):
+                return False
+            if int(after) != int(before):
+                return False
+        elif _is_missing(before):
+            if not _is_missing(after):
+                return False
+        elif before != after:
+            return False
+    return True
 
 
 def _array_values(values: list[object], name: str) -> tuple[np.ndarray, tuple[int, ...]]:
@@ -97,6 +131,10 @@ def _array_values(values: list[object], name: str) -> tuple[np.ndarray, tuple[in
             raise RaggedDataError(f"Field {name!r} contains scalar and array values")
         if array.dtype.kind == "O":
             raise UnsupportedDataError(f"Field {name!r} contains an unsupported object array")
+        if not isinstance(value, np.ndarray) and not _same_values(
+            np.asarray(value, dtype=object), array
+        ):
+            raise LossyConversionError(f"Field {name!r} cannot promote array values losslessly")
         shape = tuple(array.shape)
         if expected_shape is None:
             expected_shape = shape
@@ -113,7 +151,20 @@ def _array_values(values: list[object], name: str) -> tuple[np.ndarray, tuple[in
         raise RaggedDataError(f"Field {name!r} has inconsistent array shapes") from exc
     if stacked.dtype.kind == "O":
         raise UnsupportedDataError(f"Field {name!r} contains an unsupported object array")
+    for original, converted in zip(arrays, stacked, strict=True):
+        if original.dtype != converted.dtype and not _same_values(original, converted):
+            raise LossyConversionError(f"Field {name!r} cannot promote array values losslessly")
     return stacked, expected_shape
+
+
+def _column_values(series: pd.Series, name: str) -> np.ndarray:
+    """Materialize one record column without unsafe scalar or array promotion."""
+    if isinstance(series.dtype, np.dtype) and series.dtype.kind in "biufc":
+        return series.to_numpy(copy=True)
+    values = series.tolist()
+    if any(_is_nested(value) for value in values if not _is_missing(value)):
+        return _array_values(values, name)[0]
+    return _scalar_values(values, name)
 
 
 def _axis_names(name: str, shape: tuple[int, ...], used: set[str]) -> tuple[str, ...]:
@@ -163,17 +214,16 @@ def dataset_to_scientific(dataset: Dataset, *, record_dim: str | None = None) ->
     data_vars: dict[str, Any] = {}
     used_dimensions = {resolved_record_dim}
     for name in dataset.data.columns:
-        values = dataset.data[name].tolist()
-        nested = any(_is_nested(value) for value in values if not _is_missing(value))
+        array = _column_values(dataset.data[name], str(name))
         attributes = _variable_attributes(metadata, str(name))
-        if nested:
-            stacked, shape = _array_values(values, str(name))
+        if array.ndim > 1:
+            shape = tuple(array.shape[1:])
             dimensions = (resolved_record_dim, *_axis_names(str(name), shape, used_dimensions))
-            data_vars[str(name)] = (dimensions, stacked, attributes)
+            data_vars[str(name)] = (dimensions, array, attributes)
         else:
             data_vars[str(name)] = (
                 (resolved_record_dim,),
-                _scalar_values(values, str(name)),
+                array,
                 attributes,
             )
     return ScientificDataset(
@@ -253,12 +303,10 @@ def scientific_to_dataset(value: ScientificDataset, *, record_dim: str | None = 
     metadata = deepcopy(value.metadata)
     metadata.pop(_INTERNAL_RECORD_DIM, None)
     units = dict(metadata.get("units", {})) if isinstance(metadata.get("units"), dict) else {}
-    for name, variable in value.data.data_vars.items():
-        if "unit" in variable.attrs:
-            units[name] = variable.attrs["unit"]
-    for name, coordinate in value.data.coords.items():
-        if "unit" in coordinate.attrs:
-            units[name] = coordinate.attrs["unit"]
+    for name, variable in value.data.variables.items():
+        unit = declared_unit(variable, value.metadata, name)
+        if unit is not None:
+            units[name] = unit
     if units:
         metadata["units"] = units
     return Dataset(frame, metadata, value.source)

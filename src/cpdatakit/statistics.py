@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from numbers import Real
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
+from ._numeric_summary import finite_statistics
 from .domains.crystal_plasticity import summarize_cp_identifiers
 from .model import Dataset, ValidationResult
 from .schema import BUILTIN_PROFILES, ProfileSchema, load_schema
@@ -40,18 +42,21 @@ def summarize_dataset(
                 infinite[spec.name] = "not available"
                 numeric[spec.name] = "not available"
                 continue
-            values = pd.to_numeric(series, errors="coerce")
-            finite = values[np.isfinite(values)]
-            infinite[spec.name] = int((values.notna() & ~np.isfinite(values)).sum())
+            # Coercing a whole object column promotes its integers to floats if
+            # any record is missing or fractional. Coerce scalar records first.
+            values = (
+                [
+                    pd.to_numeric(item, errors="coerce") if pd.api.types.is_scalar(item) else np.nan
+                    for item in series
+                ]
+                if not pd.api.types.is_numeric_dtype(series.dtype)
+                else pd.to_numeric(series, errors="coerce").tolist()
+            )
+            present = [item for item in values if isinstance(item, Real) and not pd.isna(item)]
+            finite = [item for item in present if isinstance(item, int) or np.isfinite(item)]
+            infinite[spec.name] = len(present) - len(finite)
             numeric[spec.name] = (
-                {
-                    "min": float(finite.min()),
-                    "max": float(finite.max()),
-                    "mean": float(finite.mean()),
-                    "std": float(finite.std(ddof=0)),
-                }
-                if not finite.empty
-                else "not available"
+                finite_statistics(finite, include_std=True) if finite else "not available"
             )
     summary = {
         "record_count": len(value.data),

@@ -4,7 +4,34 @@ All notable changes follow Keep a Changelog; versions follow Semantic Versioning
 
 ## [Unreleased]
 
+### Changed
+
+- Organize the local workbench into a Chinese preparation, validation and results workflow,
+  with the selected input and schema kept visible, explicit output-conflict guidance, and
+  direct links to completed artifacts. Advanced authoring and multidimensional controls remain
+  available in expandable sections.
+- Present offline HTML reports with readable validation summaries, statistics tables and
+  provenance summaries while retaining full metadata details and the existing JSON/Markdown
+  contracts. See `docs/workbench-guide.md` for the development interface.
+
 ### Fixed
+
+- Honor hidden controls in the workbench stylesheet so pagination and optional panels stay
+  hidden when they are unavailable. Label validation results from earlier input selections.
+- Preserve exact integer values and scalar categories across scientific/table conversions;
+  reject unsafe mixed-array promotion and unsupported nullable object storage before publication.
+  Resolve standard `units`, `unit` and metadata declarations consistently, including coordinates.
+- Keep integer summary extrema exact and compute stable means and population standard deviations
+  for finite float32/float64 extremes. Report unrepresentable comparison deltas explicitly.
+- Detect the local UI from its runtime dependencies without requiring the development-only httpx
+  client. Inspect Zarr directory sizes, file counts and links in one bounded traversal.
+- Persist independent job-completion evidence and retry catalog saves without browser polling;
+  expose pending saves, retain unsaved results, and replay validated completion records on restart.
+- Hold an operating-system workspace lock through requests, response cleanup and background jobs;
+  reject competing workbenches and release resources on shutdown or failed CLI/app startup.
+- Record output transaction stages before publication and provide a project recovery inventory.
+  Verify file identity, digests and project boundaries before copying recoverable outputs to new
+  locations; retain conflicting or damaged evidence without overwriting existing data.
 
 - Bind file and Zarr uploads to their produced identity and digest. Rollback quarantines and
   rechecks owned content, retains changed content with recovery evidence, and keeps successful
@@ -19,6 +46,12 @@ All notable changes follow Keep a Changelog; versions follow Semantic Versioning
   deduplicate rows, preserve cancellation and avoid polling stale jobs from earlier sessions.
 - Point current quickstart installs to v0.8.1 and check the maintained installation entry points
   against release metadata offline, while preserving historical version records.
+
+### Added
+
+- Test the installed wheel's complete workbench workflow in Chromium, including schema upload,
+  validation, conversion, reporting, downloads, exact read-back and a visible path error.
+  The CI job installs browser tooling separately and retains traces and server logs on failure.
 
 ## [0.8.1] - 2026-09-14
 

@@ -13,8 +13,10 @@ class Node {
   prepend(node) { node.parent = this; this.children.unshift(node); }
   replaceChildren(...nodes) { this.children = []; this.append(...nodes); }
   remove() { if (this.parent) this.parent.children = this.parent.children.filter(node => node !== this); }
-  addEventListener(type, fn) { this.listeners[type] = fn; }
-  async click() { await this.listeners.click?.({currentTarget: this, target: this}); }
+  addEventListener(type, fn) { (this.listeners[type] ||= []).push(fn); }
+  async dispatchEvent(event) { for (const fn of this.listeners[event.type] || []) await fn({preventDefault() {}, ...event, currentTarget: this, target: this}); }
+  async click() { await this.dispatchEvent({type: 'click'}); }
+  focus() { this.focused = true; }
   cloneNode() { const copy = new Node(this.tagName); Object.assign(copy, this, {children: [...this.children]}); return copy; }
   querySelectorAll(selector) {
     const all = this.children.flatMap(node => [node, ...node.querySelectorAll('*')]);
@@ -45,13 +47,36 @@ function page(overrides = {}, offset = 0, counts = {}) {
   return value;
 }
 
-function environment(initial, responder) {
+function environment(initial, responder, {authoring = false} = {}) {
   const nodes = new Map();
   for (const id of ['dataset', 'schema', 'artifacts', 'jobs', 'operation-result', 'result-title', 'result-content',
-                    'project-resources', 'slice-image', 'slice-caption', 'slice-download', 'slice-preview']) {
+                    'project-resources', 'slice-image', 'slice-caption', 'slice-download', 'slice-preview',
+                    'current-dataset', 'current-schema', 'workflow-status', 'output-feedback-convert',
+                    'output-feedback-report', 'convert-output', 'report-output', 'mapping-json']) {
     nodes.set('#' + id, new Node(['dataset', 'schema'].includes(id) ? 'select' : 'div'));
   }
   const schemaGroup = new Node('optgroup'); nodes.get('#schema').append(schemaGroup);
+  if (authoring) for (const id of ['draft-schema', 'schema-draft-json', 'authoring-status', 'schema-review',
+                                  'draft-editor', 'save-draft', 'preview-mapping', 'mapping-preview', 'mapping-preview tbody']) {
+    nodes.set('#' + id, new Node());
+  }
+  for (const name of ['curve', 'point']) {
+    const option = new Node('option'); option.value = name; option.textContent = name;
+    schemaGroup.append(option);
+  }
+  nodes.get('#schema').value = 'curve';
+  const forms = ['validate', 'convert', 'report'].map(operation => {
+    const form = new Node('form'); form.dataset.operation = operation;
+    form.action = `/api/projects/1/${operation}`;
+    const button = new Node('button'); form.append(button);
+    if (operation !== 'validate') {
+      const output = nodes.get(`#${operation}-output`); output.name = 'output';
+      output.value = operation === 'convert' ? 'results/converted.h5' : 'results/report.html';
+      const force = new Node('input'); force.name = 'force'; force.type = 'checkbox'; force.value = 'true'; force.checked = false;
+      form.append(output, force); form.force = force;
+    }
+    nodes.set(`form:${operation}`, form); return form;
+  });
   nodes.get('#project-resources').textContent = JSON.stringify(initial);
   for (const item of initial.datasets) {
     const option = new Node('option'); option.value = String(item.id); option.textContent = item.relative_path;
@@ -75,25 +100,145 @@ function environment(initial, responder) {
     querySelectorAll: selector => {
       if (selector === '[data-load-more]') return controls;
       if (selector === '[data-job-id]') return nodes.get('#jobs').children;
+      if (selector === 'form[data-operation]') return forms;
       return [];
     },
     createElement: tag => new Node(tag), addEventListener() {}, dispatchEvent() {},
   };
-  const context = vm.createContext({document, Event: class {}, FormData: class {}, CSS: {escape: value => value},
+  class FormData {
+    constructor(form) { this.values = new Map(); for (const node of form?.children || []) if (node.name && (node.type !== 'checkbox' || node.checked)) this.set(node.name, node.value); }
+    set(name, value) { this.values.set(name, value); }
+    get(name) { return this.values.get(name); }
+    delete(name) { this.values.delete(name); }
+    append(name, value) { this.set(name, value); }
+  }
+  const posted = [];
+  const context = vm.createContext({document, Event: class {constructor(type) {this.type = type;}}, FormData, Blob, CSS: {escape: value => value},
     setTimeout, clearTimeout, console, URLSearchParams,
     setupAuthoring() {}, setupFields() {},
-    fetch: async (url, options) => { calls.push(url); return {ok: true, json: async () => responder(url, options)}; },
+    fetch: async (url, options) => {
+      calls.push(url); if (options?.body) posted.push(options.body);
+      const reply = await responder(url, options);
+      return {ok: !reply?.httpStatus || reply.httpStatus < 400, status: reply?.httpStatus || 200,
+        json: async () => reply?.httpStatus ? reply.payload : reply};
+    },
   });
   const directory = path.join(__dirname, '../src/cpdatakit/web/static');
   const fields = fs.readFileSync(path.join(directory, 'fields.js'), 'utf8').replace(/^export /gm, '');
   vm.runInContext(fields, context);
+  const authoringCode = fs.readFileSync(path.join(directory, 'authoring.js'), 'utf8').replace(/^export /gm, '');
+  vm.runInContext(authoringCode, context);
   const app = fs.readFileSync(path.join(directory, 'app.js'), 'utf8').replace(/^import .*;\r?\n/gm, '');
   vm.runInContext(app, context);
-  return {nodes, calls, context, run: script => vm.runInContext(script, context)};
+  return {nodes, calls, posted, context, run: script => vm.runInContext(script, context)};
 }
 
+const visibleText = node => [node.textContent, ...node.children.filter(child => child.tagName !== 'details').map(visibleText)].join(' ');
+
 async function check(name) {
-  if (name === 'active-history') {
+  if (name === 'mapping-scope') {
+    const env = environment(page({datasets: [{id: 1, relative_path: 'raw.csv'}]}), () => page());
+    env.context.result = {operation: 'preview_mapping', status: 'succeeded', provenance: {input_filename: 'raw.csv'}, value: {validation: {valid: true, errors: [], warnings: []}, fields: []}};
+    env.run('showResult("映射预览", result, selectedContext())');
+    assert.match(visibleText(env.nodes.get('#workflow-status')), /映射后/, 'Preview validates the mapped values, not the unchanged source');
+    assert.match(visibleText(env.nodes.get('#result-content')), /尚未.*保存|尚未.*写出/, 'Preview cannot imply a converted file was written');
+  } else if (name === 'authoring-save') {
+    const env = environment(page({datasets: [{id: 1, relative_path: 'raw.csv'}]}), url => url.endsWith('/schemas')
+      ? {name: 'custom', version: '1.0', id: 5, selector: 'schema:5'}
+      : {operation: 'validate_and_summarize', status: 'succeeded', provenance: {input_filename: 'raw.csv'}, value: {validation: {valid: true, errors: [], warnings: []}}}, {authoring: true});
+    await env.nodes.get('form:validate').dispatchEvent({type: 'submit'});
+    env.nodes.get('#schema-draft-json').value = '{"profile":"custom","schema_version":"1.0","fields":[]}';
+    await env.nodes.get('#save-draft').click();
+    assert.equal(env.nodes.get('#schema').value, 'schema:5');
+    assert.match(visibleText(env.nodes.get('#workflow-status')), /历史|已切换/, 'Saving and selecting a new rule invalidates the current-selection status');
+    assert.match(visibleText(env.nodes.get('#current-schema')), /custom/);
+  } else if (name === 'authoring-context') {
+    let resolve;
+    const pending = new Promise(done => { resolve = done; });
+    const env = environment(page({datasets: [{id: 1, relative_path: 'raw.csv'}]}), () => pending, {authoring: true});
+    const submitted = env.nodes.get('#preview-mapping').click();
+    env.nodes.get('#schema').value = 'point';
+    await env.nodes.get('#schema').dispatchEvent({type: 'change'});
+    resolve({operation: 'preview_mapping', status: 'succeeded', provenance: {input_filename: 'raw.csv'},
+      value: {fields: [{source: 'temp_C', target: 'temperature', source_unit: 'degC', target_unit: 'K', source_dims: ['record'], target_dims: ['record'], before: [25], after: [298.15]}], validation: {valid: true, errors: [], warnings: []}}});
+    await submitted;
+    assert.match(visibleText(env.nodes.get('#result-content')), /curve/, 'Mapping preview must name the submitted schema');
+    assert.match(visibleText(env.nodes.get('#workflow-status')), /历史|已切换/);
+    assert.match(visibleText(env.nodes.get('#mapping-preview tbody')), /temp_C.*temperature.*degC.*K.*298.15/, 'Scientific field names and mapped values must remain unchanged');
+  } else if (name === 'validation-context') {
+    let resolve;
+    const pending = new Promise(done => { resolve = done; });
+    const env = environment(page({datasets: [{id: 1, relative_path: 'original.csv'}, {id: 2, relative_path: 'other.csv'}]}), () => pending);
+    const submitted = env.nodes.get('form:validate').dispatchEvent({type: 'submit'});
+    env.nodes.get('#dataset').value = '2';
+    await env.nodes.get('#dataset').dispatchEvent({type: 'change'});
+    env.nodes.get('#schema').value = 'point';
+    await env.nodes.get('#schema').dispatchEvent({type: 'change'});
+    resolve({operation: 'validate_and_summarize', status: 'succeeded', provenance: {input_filename: 'original.csv'},
+      value: {validation: {valid: false, errors: [{field: 'stress', message: 'Missing stress', code: 'missing_field', affected_records: 3}], warnings: [{field: 'strain', message: 'Extra values', code: 'extra', affected_records: 1}]},
+        summary: {record_count: 3, field_count: 2, error_count: 1, warning_count: 1}}});
+    await submitted;
+    const result = visibleText(env.nodes.get('#result-content'));
+    assert.match(result, /original.csv/, 'Result must identify the file submitted before the selection changed');
+    assert.match(result, /curve/, 'Result must identify the schema actually submitted');
+    assert.doesNotMatch(result, /other.csv|point/, 'A completed response cannot claim the newly selected inputs');
+    assert.match(result, /错误\s*1|1\s*项错误/);
+    assert.match(result, /警告\s*1|1\s*项警告/);
+    assert.match(result, /记录\s*3|3\s*条记录/);
+    assert.match(visibleText(env.nodes.get('#workflow-status')), /历史|已切换/, 'Outdated validation must remain explicitly historical');
+    assert.match(visibleText(env.nodes.get('#current-dataset')), /other.csv/);
+    assert.equal(env.posted[0].get('dataset_id'), '1');
+    assert.equal(env.posted[0].get('schema'), 'curve');
+  } else if (name === 'validation-history') {
+    const env = environment(page({datasets: [{id: 1, relative_path: 'sample.csv'}]}), () => ({operation: 'validate_and_summarize', status: 'succeeded', provenance: {input_filename: 'sample.csv'}, value: {validation: {valid: true, errors: [], warnings: []}, summary: {record_count: 2, field_count: 2}}}));
+    await env.nodes.get('form:validate').dispatchEvent({type: 'submit'});
+    env.nodes.get('#schema').value = 'point';
+    await env.nodes.get('#schema').dispatchEvent({type: 'change'});
+    assert.match(visibleText(env.nodes.get('#workflow-status')), /历史|已切换/);
+    assert.match(visibleText(env.nodes.get('#result-content')), /curve/);
+    assert.match(visibleText(env.nodes.get('#current-schema')), /point/);
+  } else if (name === 'output-conflict') {
+    let retry = false;
+    const env = environment(page({datasets: [{id: 1, relative_path: 'sample.csv'}]}), url => retry
+      ? (url.includes('/api/jobs/') ? {id: 'renamed', operation: 'convert', status: 'succeeded'} : url.endsWith('/convert') ? {job_id: 'renamed'} : page())
+      : ({httpStatus: 409,
+      payload: {error: {code: 'overwrite_confirmation', message: 'The requested output already exists.', action: 'Confirm overwrite explicitly before retrying.'}}}));
+    await env.nodes.get('form:convert').dispatchEvent({type: 'submit'});
+    const feedback = visibleText(env.nodes.get('#output-feedback-convert'));
+    assert.match(feedback, /results\/converted.h5/, 'Conflict must name the requested project path');
+    assert.match(feedback, /更名|修改.*路径|更换.*名称/);
+    assert.match(feedback, /覆盖/);
+    assert.equal(env.nodes.get('#convert-output').focused, true, 'Conflict should direct the user to the output path');
+    assert.equal(env.nodes.get('form:convert').force.checked, false, 'Conflict cannot authorize overwrite');
+    assert.equal(env.calls.length, 1, 'Conflict must not retry automatically');
+    assert.equal(env.posted[0].get('force'), undefined);
+    retry = true;
+    env.nodes.get('#convert-output').value = 'results/renamed.h5';
+    await env.nodes.get('form:convert').dispatchEvent({type: 'submit'});
+    assert.notEqual(env.nodes.get('#output-feedback-convert').className, 'error', 'An accepted renamed output clears the old conflict styling');
+    assert.match(visibleText(env.nodes.get('#output-feedback-convert')), /results\/renamed.h5/);
+    assert.equal(env.posted[1].get('force'), undefined, 'A rename retry still must not request overwrite');
+  } else if (name === 'artifact-actions') {
+    const env = environment(page({artifacts: [{id: 999, relative_path: 'results/report.html', kind: 'report'}]}), () => page());
+    env.context.result = {operation: 'build_report', status: 'succeeded', artifact: 'results/report.html', provenance: {artifact_id: 17, input_filename: 'source.nc'}, value: {report: {schema: {profile: 'measured', schema_version: '2.0'}, statistics: {dimensions: {time: 3, y: 2, x: 4}, fields: {temperature: {unit: 'K', dims: ['time', 'y', 'x'], shape: [3, 2, 4]}}}, validation: {valid: true, errors: [], warnings: []}}}};
+    env.run('showResult("报告完成", result)');
+    assert.match(visibleText(env.nodes.get('#result-content')), /time = 3.*y = 2.*x = 4/, 'Nested report statistics must retain their dimension context');
+    const links = env.nodes.get('#result-content').querySelectorAll('a');
+    assert.ok(links.some(link => link.href === '/api/projects/1/artifacts/17'), 'View must use the exact registered artifact identity');
+    assert.ok(links.some(link => link.href === '/api/projects/1/artifacts/17?download=true'));
+    assert.ok(!links.some(link => link.href.includes('/999')));
+    env.run('delete result.provenance.artifact_id; showResult("旧报告", result)');
+    assert.equal(env.nodes.get('#result-content').querySelectorAll('a').length, 0, 'A same-named catalog entry is not proof of result identity');
+  } else if (name === 'pending-persistence') {
+    const job = {id: 'unsaved', operation: 'report', status: 'succeeded', active: false,
+      persistence: {state: 'pending', evidence_saved: true}};
+    const env = environment(page({jobs: [job]}), () => page({jobs: [{...job, persistence: {state: 'saved'}}]}));
+    const row = () => env.nodes.get('#jobs').querySelector('[data-job-id="unsaved"]');
+    assert.ok(row().children.some(node => node.dataset.persistence === 'pending' && node.textContent.trim()), 'Unpersisted results must be visibly distinguished from durable results');
+    assert.deepEqual(env.calls, [], 'Persistence recovery is independent of browser detail polling');
+    await env.run('refreshResources()');
+    assert.ok(!row().children.some(node => node.dataset.persistence === 'pending'), 'A saved result clears the pending notice');
+  } else if (name === 'active-history') {
     const active = {id: 'long', operation: 'report', status: 'running', active: true};
     const history = Array.from({length: 50}, (_, i) => ({id: `old-${i}`, status: 'succeeded'}));
     let finish, completed = false;
@@ -138,7 +283,7 @@ async function check(name) {
     releasePage(page({jobs: [active], active_jobs: [active]}));
     await Promise.all([following, refreshing]);
     assert.equal(row().dataset.jobStatus, 'succeeded', 'An older active snapshot cannot regress a terminal row');
-    assert.equal(row().querySelector('button').textContent, 'View details');
+    assert.equal(row().querySelector('button').textContent, '查看详情');
     assert.equal(env.run('watching.size'), 0);
     env.run('renderJobs()');
     assert.equal(row().dataset.jobStatus, 'succeeded', 'Re-rendering must retain the observed terminal status');
@@ -148,7 +293,7 @@ async function check(name) {
     const env = environment(page({jobs: [stale], active_jobs: []}), () => ({...stale, status: 'failed'}));
     assert.deepEqual(env.calls, [], 'Persisted running rows must not start live polling');
     const button = env.nodes.get('#jobs').children[0].querySelector('button');
-    assert.equal(button.textContent, 'View details');
+    assert.equal(button.textContent, '查看详情');
     await button.click();
     assert.deepEqual(env.calls, ['/api/jobs/old-session']);
   } else if (name === 'historical') {
@@ -206,7 +351,7 @@ async function check(name) {
     release(page({datasets: [{id: 50, relative_path: 'old-page.csv'}]}, 50, {datasets: 100}));
     await pending;
     assert.ok(!env.nodes.get('#dataset').options.some(option => String(option.value) === '50'));
-    assert.match(env.nodes.get('[data-resource-count="datasets"]').textContent, /of 150/);
+    assert.match(env.nodes.get('[data-resource-count="datasets"]').textContent, /共 150/);
   } else if (name === 'schema-selection') {
     const env = environment(page(), () => page());
     const selected = new Node('option'); selected.value = 'schema:99'; selected.textContent = 'Thermal · 2.0 · #99';

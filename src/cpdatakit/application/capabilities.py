@@ -161,8 +161,8 @@ def discover_capabilities(
             "local-ui",
             "FastAPI local UI",
             ("serve",),
-            modules=("fastapi", "uvicorn", "jinja2", "multipart", "httpx"),
-            distributions=("fastapi", "uvicorn", "Jinja2", "python-multipart", "httpx"),
+            modules=("fastapi", "uvicorn", "jinja2", "multipart"),
+            distributions=("fastapi", "uvicorn", "Jinja2", "python-multipart"),
         )
     )
     if not options.safe_mode:

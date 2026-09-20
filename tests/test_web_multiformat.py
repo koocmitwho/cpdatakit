@@ -300,12 +300,25 @@ def test_completed_job_and_results_survive_app_restart(client):
             },
         ),
     )
-    app = create_app(client.app.state.workspace)
-    restarted = LocalClient(app)
-    response = restarted.get(f"/api/jobs/{job['id']}")
-    assert response.status_code == 200
-    assert response.json()["status"] == "succeeded"
-    app.state.jobs.shutdown()
+    workspace = client.app.state.workspace
+    artifacts = client.app.state.catalog.list_artifacts(pid)
+    assert artifacts
+    contents = {record.id: (workspace / record.relative_path).read_bytes() for record in artifacts}
+    client.app.state.close()
+    app = create_app(workspace)
+    try:
+        restarted = LocalClient(app)
+        response = restarted.get(f"/api/jobs/{job['id']}")
+        assert response.status_code == 200
+        assert response.json()["status"] == "succeeded"
+        assert response.json()["result"] == job["result"]
+        assert app.state.catalog.list_artifacts(pid) == artifacts
+        for record in artifacts:
+            downloaded = restarted.get(f"/api/projects/{pid}/artifacts/{record.id}")
+            assert downloaded.status_code == 200
+            assert downloaded.content == contents[record.id]
+    finally:
+        app.state.close()
 
 
 def test_custom_tabular_schema_supports_validation_conversion_and_plot(client):

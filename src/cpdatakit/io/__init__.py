@@ -15,7 +15,14 @@ import numpy as np
 import pandas as pd
 
 from .._atomic import cleanup_staged_file, publish_file
-from ..exceptions import DataReadError, DataValidationError, OutputExistsError, SchemaError
+from ..exceptions import (
+    DataReadError,
+    DataValidationError,
+    OutputExistsError,
+    RaggedDataError,
+    SchemaError,
+    ScientificDataError,
+)
 from ..model import Dataset, ValidationResult
 from ..provenance import build_provenance
 from ..schema import (
@@ -352,6 +359,28 @@ def _resolve_hdf5_storage_chunk_size(chunk_size: int | None) -> int | None:
     return int(chunk_size)
 
 
+def _hdf5_column_values(series: pd.Series, name: str) -> np.ndarray:
+    from ..data.scientific import _column_values
+
+    # h5py can encode text directly, but cannot preserve a missing text entry.
+    original = series.to_numpy(dtype=object)
+    if all(isinstance(item, (str, bytes)) for item in original):
+        return original.astype(h5py.string_dtype(encoding="utf-8"))
+    try:
+        values = _column_values(series, name)
+    except RaggedDataError as exc:
+        raise DataReadError(f"Cannot write inconsistent array shapes in field {name!r}") from exc
+    except ScientificDataError as exc:
+        raise DataValidationError(str(exc)) from exc
+    if values.dtype.kind == "O":
+        raise DataValidationError(
+            f"Field {name!r} has object values that HDF5 cannot store losslessly"
+        )
+    if values.dtype.kind == "U":
+        values = values.astype(h5py.string_dtype(encoding="utf-8"))
+    return values
+
+
 def write_hdf5(
     dataset: Dataset,
     output: str | Path,
@@ -419,19 +448,7 @@ def write_hdf5(
             )
             group = handle.create_group("data")
             for name in dataset.data.columns:
-                values = dataset.data[name].to_numpy()
-                if values.dtype.kind in {"O", "U"}:
-                    if len(values) and all(
-                        isinstance(item, (list, tuple, np.ndarray)) for item in values
-                    ):
-                        try:
-                            values = np.stack(values)
-                        except ValueError as exc:
-                            raise DataReadError(
-                                f"Cannot write inconsistent array shapes in field {name!r}"
-                            ) from exc
-                    else:
-                        values = values.astype(h5py.string_dtype(encoding="utf-8"))
+                values = _hdf5_column_values(dataset.data[name], str(name))
                 chunks = None
                 if resolved_chunk_size is not None and len(values):
                     chunks = (min(resolved_chunk_size, len(values)), *values.shape[1:])

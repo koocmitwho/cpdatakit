@@ -52,6 +52,14 @@ def scientific_for_write(value: Any) -> Any:
     """Attach encoded metadata to a shallow copy of the xarray dataset."""
     if METADATA_KEY in value.data.attrs:
         raise DataValidationError(f"Attribute {METADATA_KEY!r} is reserved for CPDataKit metadata")
+    for name, variable in value.data.variables.items():
+        if variable.dtype.kind == "O" and not all(
+            isinstance(item, (str, bytes)) for item in variable.values.flat
+        ):
+            raise DataValidationError(
+                f"Variable {name!r} has an unsupported object dtype; "
+                "writing it cannot guarantee lossless values and missingness"
+            )
     payload = encode_metadata(value.metadata)
     dataset = value.data.copy(deep=False)
     dataset.attrs = {**value.data.attrs, METADATA_KEY: payload}

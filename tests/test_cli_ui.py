@@ -41,3 +41,18 @@ def test_ui_cli_rejects_non_loopback_host(
 
     assert exit_info.value.code == 2
     assert "invalid choice" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("failure", ["browser", "server"])
+def test_ui_startup_failure_releases_workspace(tmp_path, monkeypatch, failure):
+    from cpdatakit.web import create_app
+
+    def reject(*args, **kwargs):
+        raise OSError("startup failed")
+
+    monkeypatch.setattr(webbrowser, "open", reject if failure == "browser" else lambda url: True)
+    monkeypatch.setattr("uvicorn.run", reject)
+    with pytest.raises(OSError, match="startup failed"):
+        cli.main(["ui", "--workspace", str(tmp_path)])
+    restarted = create_app(tmp_path)
+    restarted.state.close()

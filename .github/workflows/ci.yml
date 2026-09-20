@@ -44,6 +44,34 @@ jobs:
       - run: wheel-env/bin/cpdatakit ui --no-browser --help
       - run: wheel-env/bin/python -c "from cpdatakit.web import create_app; print(create_app('ui-smoke').title)"
 
+  browser-wheel:
+    name: Installed-wheel Chromium workflow
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install build and browser test tools
+        run: |
+          python -m pip install build playwright==1.63.0
+          python -m playwright install --with-deps chromium
+      - name: Install wheel into an independent runtime
+        run: |
+          python -m build --wheel --outdir browser-dist
+          python -m venv browser-runtime
+          browser-runtime/bin/python -m pip install browser-dist/*.whl
+          browser-runtime/bin/python -m pip check
+      - name: Upload, validate, convert, report and read back downloads
+        run: python scripts/smoke_browser_installed.py --python browser-runtime/bin/python --output-dir browser-evidence
+      - name: Retain browser and server evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: installed-wheel-browser
+          path: browser-evidence/
+
   minimum-dependencies:
     name: Minimum supported dependencies (feasible combination)
     runs-on: ubuntu-latest

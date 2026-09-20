@@ -8,6 +8,7 @@ from numbers import Real
 from pathlib import Path
 from typing import Any
 
+from ._numeric_summary import finite_difference, numeric_equal
 from .exceptions import SchemaError
 from .schemas import ResolvedSchemaV2, SchemaV2, resolve_schema_v2, schema_v2_sha256
 
@@ -279,6 +280,12 @@ def compare_scientific_statistics(
             }
             if not (_finite(left_value) and _finite(right_value)):
                 result["unavailable"].append(item)
-            elif left_value != right_value:
-                result["changed"].append({**item, "delta": right_value - left_value})
+            elif not numeric_equal(left_value, right_value):
+                delta = finite_difference(left_value, right_value)
+                if _finite(delta):
+                    result["changed"].append({**item, "delta": delta})
+                else:
+                    result["unavailable"].append(
+                        {**item, "reason": "Difference cannot be represented as a finite number"}
+                    )
     return result

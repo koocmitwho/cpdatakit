@@ -2,6 +2,7 @@
 
 import shutil
 import tempfile
+from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -49,7 +50,12 @@ def register_snapshot(
         digest = path_sha256(snapshot)
         if digest != expected:
             raise CatalogError("Output changed while its artifact snapshot was being created")
-        return catalog.register_artifact(
+        from .recovery import ACTIVE_TRANSACTION
+
+        transaction = ACTIVE_TRANSACTION.get()
+        if transaction is not None:
+            transaction.snapshot(snapshot)
+        record = catalog.register_artifact(
             project_id,
             snapshot,
             kind=kind,
@@ -58,8 +64,14 @@ def register_snapshot(
                 **metadata,
                 "output_path": source.relative_to(workspace).as_posix(),
                 "hash_scope": "tree" if snapshot.is_dir() else "file",
+                **({"transaction_id": transaction.data["id"]} if transaction else {}),
             },
         )
+        if transaction is not None:
+            # A post-commit evidence write failure must not delete a registered snapshot.
+            with suppress(OSError):
+                transaction.registered(record)
+        return record
     except BaseException:
         shutil.rmtree(version)
         raise
