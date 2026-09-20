@@ -1,9 +1,10 @@
 # Roadmap
 
-The current published release is **v0.8.1**, available from PyPI and GitHub. Follow the
-[quickstart](quickstart.md) for current installation commands. v0.8.1 adds no-clobber publication,
-recoverable output transactions, schema 2.0 report comparisons, bounded jobs and paginated
-workbench history. Earlier milestones below retain their original release context.
+The current release documented here is **v0.9.0**. Start with the
+[Chinese workbench guide](workbench-guide.md) or the [command-line quickstart](quickstart.md).
+v0.9.0 adds guided Chinese project pages and readable offline HTML reports, improves numeric
+fidelity, and strengthens job persistence and interrupted-output recovery. Earlier milestones
+below retain their original release context.
 
 - **v0.2.0 (released 2026-08-24):** schema authoring helpers, clearer tensor-valued tabular
   encodings, explicit CLI mapping files, and richer nested-field validation coverage.
@@ -45,6 +46,11 @@ See [usage](post-v07-workflows.md), [dependency combinations](v0.8-dependencies.
 
 ## Follow-up milestones
 
+- **First successful research task:** make an existing licensed example accessible after a normal
+  package installation, guide users through field/unit confirmation, and connect conversion output
+  directly to validation and reporting. The current workbench still requires converted files to be
+  uploaded again before they can be selected as inputs. Acceptance should exercise a real case and
+  reuse its reviewed schema/mapping while preserving the original values, units and provenance.
 - **Mesh topology:** use a licensed mesh and matching scalar or tensor field to define node/element
   IDs, connectivity, element types, coordinate frame, units and field association (node, cell or
   integration point). Round trips preserve IDs and connectivity. Tests catch dangling references.

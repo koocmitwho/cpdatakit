@@ -8,8 +8,10 @@
 CPDataKit is a schema-first Python toolkit for validating, normalizing, and auditing scientific and
 engineering data. It began with crystal-plasticity workflows.
 
-The v0.7 workbench supports multidimensional uploads, custom schemas, validation, conversion
-and reports. Follow the [workbench guide](docs/v0.7-workbench.md) to get started.
+v0.9.0 adds Chinese project screens with step-by-step guidance, clearer results and output-conflict
+messages, and readable offline HTML reports with statistics tables and provenance summaries.
+It also improves numeric fidelity and recovery of job and output records after process interruption.
+Start with the [current Chinese workbench guide](docs/workbench-guide.md).
 
 v0.8.0 adds selective reads, multidimensional heatmaps, editable
 schema drafts, mapping previews and reproducible batches. See
@@ -64,21 +66,22 @@ units, and identifier semantics come from the explicit schema or mapping. See
 
 ## Install
 
-Install v0.8.1 from PyPI:
+Install v0.9.0 from PyPI (Python 3.12 or later):
 
 ```bash
-python -m pip install "cpdatakit==0.8.1"
+python -m pip install "cpdatakit==0.9.0"
 ```
 
 The matching GitHub release wheel is also available:
 
 ```bash
-python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download/v0.8.1/cpdatakit-0.8.1-py3-none-any.whl"
+python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download/v0.9.0/cpdatakit-0.9.0-py3-none-any.whl"
 ```
 
-Then follow the
+Then run `cpdatakit ui` and follow the [Chinese workbench guide](docs/workbench-guide.md).
+For a command-line walkthrough, the
 [five-minute quickstart](https://github.com/koocmitwho/cpdatakit/blob/main/docs/quickstart.md)
-to validate, summarize, convert, and plot a deterministic example.
+validates, summarizes, converts, and plots a deterministic example.
 
 Installing from the source checkout is intended for contributors:
 
@@ -133,9 +136,10 @@ The examples and tests cover these paths:
 ## Useful links
 
 - [PyPI package](https://pypi.org/project/cpdatakit/)
-- [v0.8.1 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.8.1)
+- [v0.9.0 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.9.0)
 - [v0.5.0 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.5.0)
 - [Quickstart](https://github.com/koocmitwho/cpdatakit/blob/main/docs/quickstart.md)
+- [Current workbench guide (Chinese)](docs/workbench-guide.md)
 - [Schema authoring and mapping guide](https://github.com/koocmitwho/cpdatakit/blob/main/docs/schema-authoring.md)
 - [Examples](https://github.com/koocmitwho/cpdatakit/tree/main/examples)
 - [Public Reference Case #1: Surfalex HF](https://github.com/koocmitwho/cpdatakit/tree/main/examples/public-datasets/surfalex-aa6016a)
@@ -194,9 +198,12 @@ cpdatakit ui
 cpdatakit ui --workspace ./cpdatakit-workspace --no-browser
 ```
 
-The UI provides project-local uploads, bounded inspection, validation, conversion, reports,
-comparisons, plots, capability discovery, and job polling. `--no-browser` is useful for headless
-or CI smoke checks.
+The project page guides uploads, bounded inspection, validation, conversion, reports, and
+two-dimensional array slices. It identifies the input and schema behind each result, marks older
+validation results when the selection changes, and explains same-name output conflicts.
+Job records expose pending persistence, and interrupted outputs have a recovery view that copies
+verified evidence to a new location. `--no-browser` is useful for headless or CI smoke checks.
+The API also exposes report comparison, declared-field plots, and capability discovery.
 
 Compare two JSON validation reports and write an offline bundle:
 
@@ -219,9 +226,11 @@ cpdatakit report curve.h5 --schema curve --format markdown --output report.md
 `inspect` accepts an optional schema. It prints the detected format, fields, dtype, shape,
 units, missing values, HDF5 chunks, provenance, adapter, and structural risks. `report` needs a
 schema and writes HTML by default. Markdown and JSON are available through `--format`. The HTML file
-contains its own styles, so it opens and prints offline. Reports carry summary
-statistics and validation findings. Reports contain aggregate metadata while source records remain
-in the input dataset. Pass `--force` to replace an existing output file.
+contains its own styles, so it opens and prints offline. Its Chinese overview shows validation
+status, counts, field and statistics tables, and source information; complete metadata is expandable.
+Unknown statistics remain unavailable and an undeclared unit is not treated as dimensionless.
+JSON and Markdown retain their existing structures. Reports contain aggregate metadata while source
+records remain in the input dataset. Pass `--force` to replace an existing output file.
 
 CLI errors are concise. Put the global `--debug` option before the
 subcommand when an unexpected failure needs more detail. `validate`, `summary`, `inspect`, and
@@ -306,8 +315,7 @@ schema/HDF5 2.0 contracts, open-format adapters, and a local SQLite/job boundary
 v0.5 tabular, schema 1.0, HDF5 1.0, and CLI contracts. Native HDF5 inspection uses bounded reads.
 The bundled DAMASK DADF5 reader covers a documented read-only selection. New adapters use the
 documented format evidence, license review, and reproducible-fixture process. See the
-[roadmap](https://github.com/koocmitwho/cpdatakit/blob/main/docs/roadmap.md) for the next three
-versions.
+[roadmap](https://github.com/koocmitwho/cpdatakit/blob/main/docs/roadmap.md) for follow-up priorities.
 
 ## Citation and license
 
@@ -318,5 +326,6 @@ licenses and review notes are in
 [NOTICE](https://github.com/koocmitwho/cpdatakit/blob/main/NOTICE). Bundled examples use fixed-seed
 synthetic data, and public reference files remain available from their upstream records.
 
-See the [v0.8.1 release notes](.github/release-notes/v0.8.1.md) and
-[optimization verification record](docs/verification/2026-09-12-remaining-optimizations.md).
+See the [v0.9.0 release notes](.github/release-notes/v0.9.0.md) and the
+[current workbench guide](docs/workbench-guide.md). Historical validation records remain in
+[`docs/verification/`](docs/verification/).

@@ -4,6 +4,8 @@ All notable changes follow Keep a Changelog; versions follow Semantic Versioning
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-20
+
 ### Changed
 
 - Organize the local workbench into a Chinese preparation, validation and results workflow,
@@ -12,7 +14,7 @@ All notable changes follow Keep a Changelog; versions follow Semantic Versioning
   available in expandable sections.
 - Present offline HTML reports with readable validation summaries, statistics tables and
   provenance summaries while retaining full metadata details and the existing JSON/Markdown
-  contracts. See `docs/workbench-guide.md` for the development interface.
+  contracts. See `docs/workbench-guide.md` for the current interface.
 
 ### Fixed
 
@@ -44,7 +46,7 @@ All notable changes follow Keep a Changelog; versions follow Semantic Versioning
   difference between subset and full-axis automatic index types.
 - Keep current-instance active jobs visible independently of paginated workbench history;
   deduplicate rows, preserve cancellation and avoid polling stale jobs from earlier sessions.
-- Point current quickstart installs to v0.8.1 and check the maintained installation entry points
+- Point current quickstart installs to v0.9.0 and check the maintained installation entry points
   against release metadata offline, while preserving historical version records.
 
 ### Added

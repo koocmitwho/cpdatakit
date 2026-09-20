@@ -3,6 +3,10 @@
 CPDataKit 是面向科学和工程数据的 Python 工具，通过 schema 定义字段规则，完成验证、标准化
 和审计。项目最初用于晶体塑性工作流。
 
+v0.9.0 提供中文项目页面、分步操作、明确的结果与同名输出提示，以及带统计表和来源摘要的
+离线 HTML 报告；同时改进数值保真、任务终态保存和进程中断后的输出恢复。
+从[当前工作台指南](docs/workbench-guide.md)开始，完成上传、校验与报告导出。
+
 v0.8.0 新增选择性读取、多维热图、schema 草案、映射预览和可复现批处理。
 使用方法见[工作流指南](docs/post-v07-workflows.md)，另附
 [读取基准](docs/selective-reading.md)和[KupferDigital/FE 集成案例](examples/cpfe-tensile/README.md)。
@@ -35,25 +39,26 @@ v0.6 还提供 `ScientificDataset`、CPDataKit HDF5 2.0、NetCDF、Zarr 3 和仅
 
 ## 安装与快速开始
 
-v0.7 工作台支持多维数据上传、自定义 schema、验证、转换和报告。
-使用方法见 [v0.7 工作台指南](docs/v0.7-workbench.md)。
+工作台支持表格和多维数据上传、自定义规则、校验、转换和报告。
+操作步骤见[当前中文工作台指南](docs/workbench-guide.md)。
 
 v0.6.0 要求 Python 3.12 或更高版本，因为 xarray 和 Zarr 已经高于 v0.5 的依赖下限。
 Python 3.10 和 3.11 用户继续使用已发布的 v0.5.x 兼容线。
 
-从 PyPI 安装 v0.8.1：
+从 PyPI 安装 v0.9.0：
 
 ```powershell
-python -m pip install "cpdatakit==0.8.1"
+python -m pip install "cpdatakit==0.9.0"
 ```
 
 也可以安装同版本的 GitHub release wheel：
 
 ```powershell
-python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download/v0.8.1/cpdatakit-0.8.1-py3-none-any.whl"
+python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download/v0.9.0/cpdatakit-0.9.0-py3-none-any.whl"
 ```
 
-然后按照[五分钟快速教程](https://github.com/koocmitwho/cpdatakit/blob/main/docs/quickstart.md)
+安装后运行 `cpdatakit ui`，按[工作台指南](docs/workbench-guide.md)操作。
+如果使用命令行，可按[五分钟快速教程](https://github.com/koocmitwho/cpdatakit/blob/main/docs/quickstart.md)
 验证、统计、转换并绘制固定种子生成的示例。
 
 ## 仓库里的工作流
@@ -70,15 +75,16 @@ python -m pip install "https://github.com/koocmitwho/cpdatakit/releases/download
   和 schema provenance。流程按需下载第三方原始文件，并记录来源 hash。
 - 运行不含晶体塑性字段的 `examples/thermal-cycle/`，完成自定义 profile、显式温度/时间单位
   转换、HDF5 round-trip、检查、报告、比较和通用 x-y 绘图。
-- 使用 `cpdatakit ui` 启动 loopback-only 本地工作台，执行项目上传、检查、验证、转换、报告、
-  比较、绘图和 job 轮询；静态资源随 wheel 提供，不依赖 CDN。
+- 使用 `cpdatakit ui` 启动仅绑定本机回环地址的工作台，在项目页面上传、校验、转换数据、
+  生成报告或二维切片，并查看任务进度；静态资源随 wheel 提供，不依赖 CDN。
 
 ## 项目与集成链接
 
 - [PyPI 软件包](https://pypi.org/project/cpdatakit/)
-- [v0.8.1 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.8.1)
+- [v0.9.0 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.9.0)
 - [v0.5.0 GitHub Release](https://github.com/koocmitwho/cpdatakit/releases/tag/v0.5.0)
 - [五分钟快速教程](https://github.com/koocmitwho/cpdatakit/blob/main/docs/quickstart.md)
+- [当前中文工作台指南](docs/workbench-guide.md)
 - [Schema authoring 与 mapping 指南](https://github.com/koocmitwho/cpdatakit/blob/main/docs/schema-authoring.md)
 - [示例目录](https://github.com/koocmitwho/cpdatakit/tree/main/examples)
 - [公共参考案例 #1：Surfalex HF](https://github.com/koocmitwho/cpdatakit/tree/main/examples/public-datasets/surfalex-aa6016a)
@@ -131,8 +137,10 @@ cpdatakit ui
 cpdatakit ui --workspace .\cpdatakit-workspace --no-browser
 ```
 
-`--no-browser` 适用于无头环境和 CI smoke；工作台的上传、验证、转换、报告、比较、绘图、能力
-发现和 job 轮询都限制在显式 workspace 内。
+`--no-browser` 适用于无头环境和 CI 启动检查。页面会显示本次处理使用的文件与规则；
+切换选择后，旧校验结论会标记为历史结果。同名输出需改名另存或显式勾选替换。
+任务记录显示结果是否仍待保存；中断输出的恢复入口会核对已有证据，并复制到新位置。
+报告比较、声明字段绘图和能力发现还可通过 API 调用。
 
 比较两份 JSON 验证报告并生成离线 bundle：
 
@@ -145,8 +153,10 @@ bundle 包含 JSON、Markdown、HTML 和带成员 hash 的 manifest。比较内�
 
 `inspect` 的 schema 参数可选。它会显示文件类型、格式版本、字段 dtype/shape/单位、缺失值、
 HDF5 chunk、provenance、adapter 和结构风险。`report` 要求显式 schema，默认生成可离线打开的
-HTML，也支持 `--format markdown` 和 `--format json`。报告包含统计和验证结果，原始记录继续保留在
-输入数据中。替换已有输出时显式传入 `--force`。处理成功且没有验证错误时退出码为 `0`；
+HTML，也支持 `--format markdown` 和 `--format json`。HTML 顶部显示校验状态与数量，
+随后列出字段、统计表和来源摘要；完整元数据可以展开。未知统计标记为未提供，未声明单位
+不会当作无量纲。JSON 与 Markdown 沿用原有结构，原始记录继续保留在输入数据中。
+替换已有输出时显式传入 `--force`。处理成功且没有验证错误时退出码为 `0`；
 验证错误，或 `inspect` 发现声明的结构/缺失值风险时为 `1`。只有 warning 的结果仍会被报告，
 但不会让结果失效。参数、schema、读取和输出错误为 `2`。验证结果描述声明的结构检查，物理或科学判断结合领域方法完成。使用 `cpdatakit --help`
 查看完整帮助。
@@ -192,5 +202,6 @@ Apache-2.0，依赖许可核查见
 [NOTICE](https://github.com/koocmitwho/cpdatakit/blob/main/NOTICE)，引用信息见
 [CITATION.cff](https://github.com/koocmitwho/cpdatakit/blob/main/CITATION.cff)。
 
-本轮改动见 [v0.8.1 发行说明](.github/release-notes/v0.8.1.md)和
-[优化验证记录](docs/verification/2026-09-12-remaining-optimizations.md)。
+本轮改动见 [v0.9.0 发行说明](.github/release-notes/v0.9.0.md)和
+[当前工作台指南](docs/workbench-guide.md)。历史验证记录保留在
+[`docs/verification/`](docs/verification/)。
