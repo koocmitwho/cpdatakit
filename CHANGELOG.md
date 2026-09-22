@@ -4,6 +4,23 @@ All notable changes follow Keep a Changelog; versions follow Semantic Versioning
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-09-22
+
+### Fixed
+
+- Return a fixed schema-upload error message without exposing internal exception details to
+  browser clients. Keep invalid-upload cleanup and retry behavior covered by regression tests.
+- Hold the active-job test fixture until the test explicitly releases it, so slow catalog writes
+  cannot expire its artificial worker delay before visibility and cancellation checks finish.
+  Preserve all existing product assertions and cleanup.
+
+### Changed
+
+- Extend the pandas requirement to `>=2.2,<4`, with installed-metadata boundary checks and
+  compatibility validation for pandas 2.2.2, 2.2.3 and 3.0.6.
+- Update both pinned CodeQL init/analyze actions to v4.38.0.
+- Point current installation commands, wheel URLs and release links to v0.9.1.
+
 ## [0.9.0] - 2026-09-20
 
 ### Changed

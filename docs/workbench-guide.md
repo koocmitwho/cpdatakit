@@ -1,9 +1,9 @@
 # 中文工作台与数据报告
 
-本页对应 v0.9.0 的中文项目页面。需要 Python 3.12 或更高版本：
+本页对应 v0.9.1 的中文项目页面；这套界面在 v0.9.0 引入。需要 Python 3.12 或更高版本：
 
 ```powershell
-python -m pip install "cpdatakit==0.9.0"
+python -m pip install "cpdatakit==0.9.1"
 cpdatakit ui --workspace ./cpdatakit-workspace
 ```
 
@@ -15,6 +15,9 @@ cpdatakit ui --workspace ./cpdatakit-workspace
 在“数据规则（Schema）”中选择数据适用的规则。规则声明字段名称、类型、单位和维度，
 不是对科学结论的判断。表格可使用内置曲线、采样点、二维场规则，也可展开
 “添加自定义规则”上传独立 JSON；多维数组使用 schema 2.0。
+
+v0.9.1 在规则上传失败时返回固定错误提示，避免把内部异常细节显示给浏览器。
+请核对 JSON 内容与 schema 声明，修正后可重新上传。
 
 选择文件并点击“上传并检查”。支持 CSV、JSON、CPDataKit HDF5、NetCDF、Parquet，
 Zarr 使用单独的目录上传入口。页面显示当前数据和规则，上传后可继续校验。

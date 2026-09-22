@@ -1,9 +1,11 @@
 # Roadmap
 
-The current release documented here is **v0.9.0**. Start with the
+The current release documented here is **v0.9.1**. Start with the
 [Chinese workbench guide](workbench-guide.md) or the [command-line quickstart](quickstart.md).
-v0.9.0 adds guided Chinese project pages and readable offline HTML reports, improves numeric
-fidelity, and strengthens job persistence and interrupted-output recovery. Earlier milestones
+v0.9.1 fixes schema-upload error disclosure, permits pandas 3, updates the CodeQL action,
+and makes the active-job test fixture wait for explicit release during slow catalog writes.
+v0.9.0 introduced guided Chinese project pages and readable offline HTML reports, improved numeric
+fidelity, and strengthened job persistence and interrupted-output recovery. Earlier milestones
 below retain their original release context.
 
 - **v0.2.0 (released 2026-08-24):** schema authoring helpers, clearer tensor-valued tabular
