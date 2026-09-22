@@ -10,6 +10,7 @@ import h5py
 import httpx
 import pytest
 
+from cpdatakit.exceptions import CatalogError
 from cpdatakit.formats import NetCDFWriter, ZarrWriter
 from cpdatakit.web import create_app
 
@@ -164,6 +165,69 @@ def test_schema_upload_rejects_external_composition(client, thermal_schema, refe
     )
     assert response.status_code == 400
     assert client.get(f"/api/projects/{pid}").json()["schemas"] == []
+
+
+def test_schema_upload_hides_parser_implementation_details(client):
+    pid = project(client)
+    response = client.post(
+        f"/api/projects/{pid}/schemas",
+        files={
+            "file": (
+                "schema.json",
+                json.dumps({"schema_version": "1.0", "profile": "example", "fields": [{}]}),
+            )
+        },
+    )
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error"]["code"] == "invalid_schema"
+    assert payload["detail"] == payload["error"]["message"]
+    assert payload["error"]["action"]
+    assert "FieldSchema" not in response.text
+    assert "__init__" not in response.text
+    assert client.get(f"/api/projects/{pid}").json()["schemas"] == []
+
+
+@pytest.mark.parametrize("error_type", [CatalogError, OSError, ValueError, UnicodeError])
+def test_schema_upload_hides_backend_errors_and_removes_unregistered_file(
+    client, thermal_schema, monkeypatch, error_type
+):
+    pid = project(client)
+    internal_detail = (
+        "InternalSchemaStore failed at private/schema-cache.json; bearer opaque-value; "
+        "Traceback (most recent call last): internal_write in storage_backend.py"
+    )
+
+    def fail_registration(*args, **kwargs):
+        raise error_type(internal_detail)
+
+    # Fail at the persistence boundary after the real schema file has been written.
+    with monkeypatch.context() as patch:
+        patch.setattr(client.app.state.catalog, "register_schema", fail_registration)
+        response = client.post(
+            f"/api/projects/{pid}/schemas",
+            files={"file": ("schema.json", json.dumps(thermal_schema))},
+        )
+
+    assert response.status_code == 400
+    payload = response.json()
+    assert payload["error"]["code"] == "invalid_schema"
+    assert payload["detail"] == payload["error"]["message"]
+    assert payload["error"]["action"]
+    for private_value in (
+        "InternalSchemaStore",
+        "private/schema-cache.json",
+        "opaque-value",
+        "Traceback",
+        "internal_write",
+        "storage_backend.py",
+    ):
+        assert private_value not in response.text
+    assert client.get(f"/api/projects/{pid}").json()["schemas"] == []
+    schema_dir = client.app.state.workspace / "projects" / str(pid) / "schemas"
+    assert list(schema_dir.iterdir()) == []
+    assert upload_schema(client, pid, thermal_schema).startswith("schema:")
 
 
 @pytest.mark.parametrize(
