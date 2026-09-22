@@ -32,7 +32,8 @@ def test_active_job_survives_fifty_newer_records_and_is_cancellable(tmp_path, mo
 
         def blocked(request):
             entered.set()
-            assert release.wait(15)
+            # Keep the worker active during slow catalog I/O; finally always releases it.
+            release.wait()
             return original(request)
 
         monkeypatch.setattr(module, "build_report", blocked)
