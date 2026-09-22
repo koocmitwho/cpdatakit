@@ -2,11 +2,26 @@ from __future__ import annotations
 
 import importlib.util
 import tomllib
+from importlib.metadata import requires
 from pathlib import Path
+
+import pytest
+from packaging.requirements import Requirement
 
 from cpdatakit import __version__
 
 ROOT = Path(__file__).parents[1]
+
+
+@pytest.mark.parametrize(
+    ("version", "accepted"),
+    [("2.1.4", False), ("2.2.0", True), ("2.3.3", True), ("3.0.6", True), ("4.0.0", False)],
+)
+def test_installed_metadata_admits_supported_pandas_releases(version, accepted) -> None:
+    dependencies = [Requirement(item) for item in requires("cpdatakit") or []]
+    requirement = next(item for item in dependencies if item.name == "pandas")
+
+    assert requirement.specifier.contains(version) is accepted
 
 
 def _load_release_checker():
@@ -27,7 +42,7 @@ def test_v06_version_and_runtime_dependency_metadata() -> None:
     dependencies = set(project["dependencies"])
     assert {
         "numpy>=2.0,<3",
-        "pandas>=2.2,<3",
+        "pandas>=2.2,<4",
         "xarray>=2026.7,<2027",
         "zarr>=3.1,<4",
         "pyarrow>=25,<26",
@@ -97,8 +112,6 @@ def test_v06_mainline_docs_close_preflight_claims_after_release() -> None:
 
 
 def test_runtime_requirements_exclude_reproduced_numpy2_import_failures():
-    from packaging.requirements import Requirement
-
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     requirements = {item.name: item.specifier for item in map(Requirement, project["dependencies"])}
     assert "3.10.0" not in requirements["h5py"]
