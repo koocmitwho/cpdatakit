@@ -177,13 +177,11 @@ def install_workbench(app, templates, *, csrf_token, session_token, require_csrf
                 },
                 status_code=201,
             )
-        except (CPDataKitError, ValueError, OSError, UnicodeError) as exc:
-            from ..inspection import sanitize_error_message
-
+        except (CPDataKitError, ValueError, OSError, UnicodeError):
             return _json_error(
                 400,
                 "invalid_schema",
-                sanitize_error_message(exc),
+                "Schema upload failed. Check the schema JSON and workspace.",
                 "Upload a valid schema 1.0 or standalone schema 2.0 JSON file.",
             )
         finally:
