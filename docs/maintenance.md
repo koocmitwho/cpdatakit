@@ -1,6 +1,6 @@
 # Maintenance
 
-The release documented by this checkout is v0.9.0. Keep `pyproject.toml`, `_version.py` and `CITATION.cff` aligned
+The release documented by this checkout is v0.9.1. Keep `pyproject.toml`, `_version.py` and `CITATION.cff` aligned
 with the current release. For each authorized release, update the version metadata, `CHANGELOG.md`,
 and `CITATION.cff` together, then run every check below before publishing.
 

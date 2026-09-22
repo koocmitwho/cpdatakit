@@ -1,6 +1,6 @@
 # 多维查看、schema 草案与批处理
 
-安装 `python -m pip install "cpdatakit==0.9.0"` 后，即可查看多维数据、
+安装 `python -m pip install "cpdatakit==0.9.1"` 后，即可查看多维数据、
 编辑 schema 和运行批处理。需要 Python >=3.12。
 首次使用页面时，先按[当前中文工作台指南](workbench-guide.md)完成上传、校验与报告。
 
