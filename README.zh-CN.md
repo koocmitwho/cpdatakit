@@ -113,12 +113,20 @@ python3 -m venv .venv-cpdatakit
 核对后勾选“已核对字段及来源”，点击“确认导入”。数字列的来源单位与输出单位必须明确；
 未知单位须查证来源，不能填成无量纲。原始第四列仍保存在原文件中。
 
+![CPDataKit CSV 确认界面：保留五列、排除第四列，力的单位由 N 转为 kN](https://raw.githubusercontent.com/koocmitwho/cpdatakit/main/assets/workbench/csv-confirmation-v0.12.0.png)
+
+*v0.12.0 工作台，使用上面的三行合成示例。导入前可核对字段名、单位、排除列和来源说明。*
+
 ### 3. 检查、保存并继续处理
 
 1. 导入后，当前数据与规则自动选中。点击“生成报告”，选择 JSON 或 HTML 及新的保存路径，检查 **3 条记录、零错误、零警告**。
 2. 点击“转换并保存”，选择 HDF5 和新的项目内路径，例如 `results/csv-demo.h5`。
 3. 完成后点击“使用此结果继续处理”。输入切换到转换时保存的快照及原规则，再用新路径生成一份报告。
 4. 在“结果”中打开报告、下载 HDF5，并核对原文件、规则和导入清单。
+
+![CPDataKit 工作台：三条记录校验通过，错误和警告均为零，结果区显示 HTML 报告、HDF5 文件和继续处理入口](https://raw.githubusercontent.com/koocmitwho/cpdatakit/main/assets/workbench/checks-and-results-v0.12.0.png)
+
+*同一合成示例完成校验、HTML 报告生成与 HDF5 转换后的界面。结果区提供下载和“使用此结果继续处理”入口。*
 
 结果字段顺序应为 `time, extension, force, reported_stress, reported_strain`；
 `force` 应为 **`0.1, 0.25, 0.375 kN`**。CSV 导入已经应用表中声明的换算，
