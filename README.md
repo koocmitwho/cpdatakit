@@ -164,6 +164,11 @@ After checking the declarations, tick “Fields and source checked” (`已核�
 Investigate unknown units rather than declaring them dimensionless.
 The original fourth column remains in the source file.
 
+![CPDataKit CSV confirmation: five retained fields, the fourth column excluded, and force converted from N to kN](https://raw.githubusercontent.com/koocmitwho/cpdatakit/main/assets/workbench/csv-confirmation-v0.12.0.png)
+
+*v0.12.0 workbench, using the three-row synthetic example above. Field names, units, excluded columns,
+and the source description remain visible before import.*
+
 ### 3. Check, save, and continue
 
 1. The imported data and schema are selected automatically.
@@ -176,6 +181,11 @@ The original fourth column remains in the source file.
    and its original schema. Generate another report with a new output path.
 4. Under “Results” (`结果`), open the report, download
    the HDF5 file, and check the original file, schema, and import manifest.
+
+![CPDataKit workbench showing three validated records, zero errors and warnings, an HTML report, and an HDF5 result with a continuation action](https://raw.githubusercontent.com/koocmitwho/cpdatakit/main/assets/workbench/checks-and-results-v0.12.0.png)
+
+*The same synthetic example after validation, HTML report generation, and HDF5 conversion.
+The results area provides downloads and “Use this result to continue”.*
 
 The resulting field order should be
 `time, extension, force, reported_stress, reported_strain`;

@@ -12,6 +12,7 @@ htmlcov/
 build/
 dist/
 *.png
+!assets/workbench/*.png
 *.svg
 *.h5
 *.hdf5
