@@ -1,6 +1,6 @@
 # CPDataKit
 
-简体中文 | [English](https://github.com/koocmitwho/cpdatakit/blob/v0.12.0/README.md)
+简体中文 | [English](https://github.com/koocmitwho/cpdatakit/blob/main/README.md#english)
 
 [![CI](https://github.com/koocmitwho/cpdatakit/actions/workflows/ci.yml/badge.svg)](https://github.com/koocmitwho/cpdatakit/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/koocmitwho/cpdatakit)](https://github.com/koocmitwho/cpdatakit/releases/latest)
