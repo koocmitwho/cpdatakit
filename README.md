@@ -1,11 +1,29 @@
 # CPDataKit
 
-[简体中文](https://github.com/koocmitwho/cpdatakit/blob/v0.12.0/README.zh-CN.md) | English
+[简体中文完整指南](https://github.com/koocmitwho/cpdatakit/blob/main/README.zh-CN.md) | [English](#english)
 
 [![CI](https://github.com/koocmitwho/cpdatakit/actions/workflows/ci.yml/badge.svg)](https://github.com/koocmitwho/cpdatakit/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/koocmitwho/cpdatakit)](https://github.com/koocmitwho/cpdatakit/releases/latest)
 [![PyPI](https://img.shields.io/pypi/v/cpdatakit)](https://pypi.org/project/cpdatakit/)
 [![License](https://img.shields.io/github/license/koocmitwho/cpdatakit)](https://github.com/koocmitwho/cpdatakit/blob/main/LICENSE)
+
+## 中文介绍
+
+**CPDataKit 是面向科学与工程数据的 Python 工具，提供本地中文工作台、命令行和 Python API。**
+它帮助实验与工程人员整理仪器导出文件，明确字段、单位和检查规则，再完成验证、转换与可追查的交接。
+项目起源于晶体塑性（CP）数据处理，也适用于热循环等不含 CP 字段的数据。
+
+- **导入并确认 CSV：** 预览实际列，逐列确认名称、类型、来源单位、输出单位与用途；同类文件可以复用已确认设置，结构变化会显示差异。
+- **检查与转换：** 按明确声明的规则检查数据，统一字段和单位，保存 HDF5 等受支持格式，并生成离线 HTML、Markdown 或 JSON 报告。
+- **保留来源与处理记录：** CSV 确认导入保留原始文件，每份输入的来源说明和哈希独立记录；已核对的转换结果可以继续用于后续处理。
+
+当前版本为 **v0.12.0**，要求 **Python 3.12 或更高版本**。安装、三行 CSV 入门示例、格式支持范围与限制，
+请阅读[完整中文指南](https://github.com/koocmitwho/cpdatakit/blob/main/README.zh-CN.md)。
+工作台在本机运行，安装后使用无需外部服务或 AI 模型。
+
+> 数据规则检查通过不代表实验或物理结论正确；工程/真实应力应变等科学定义需要使用者明确声明。
+
+## English
 
 **Make fields, units, and checks explicit before validating, converting, and handing off scientific or engineering data.**
 
